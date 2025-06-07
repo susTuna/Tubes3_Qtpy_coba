@@ -1,4 +1,14 @@
 def kmp_search(text: str, pattern: str) -> list[int]:
+    """
+    Knuth-Morris-Pratt string searching algorithm.
+
+    Args:
+        text (str): The text to search in
+        pattern (str): The pattern to search for
+
+    Returns:
+        list[int]: List of starting indices where pattern is found in text
+    """
     matches: list[int] = []
     lps: list[int] = _generate_lps_list(pattern)
     text_length: int = len(text)
@@ -31,6 +41,20 @@ def kmp_search(text: str, pattern: str) -> list[int]:
 
 
 def _generate_lps_list(pattern: str) -> list[int]:
+    """
+    Generate the Longest Proper Prefix which is also Suffix (LPS) array.
+
+    This array is used by the KMP algorithm to determine how much to skip
+    when a mismatch occurs.
+
+    Args:
+        pattern (str): The pattern for which to generate the LPS array
+
+    Returns:
+        list[int]: LPS array where lps[i] contains the length of the longest
+                   proper prefix of pattern[0..i] which is also a suffix of 
+                   pattern[0..i]
+    """
     lps: list[int] = [0] * len(pattern)
     length: int = 0
     pointer: int = 1 # lsp[0] is always 0, start from index 1
