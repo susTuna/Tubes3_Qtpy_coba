@@ -1,14 +1,14 @@
 def kmp_search(text: str, pattern: str) -> list[int]:
-    result: list[int] = []
+    matches: list[int] = []
     lps: list[int] = _generate_lps_list(pattern)
     text_length: int = len(text)
     pattern_length: int = len(pattern)
 
     # Check for impossible case
     if not pattern or not text:
-        return result
+        return matches
     if pattern_length > text_length:
-        return result
+        return matches
 
     text_pointer: int = 0
     pattern_pointer: int = 0
@@ -19,7 +19,7 @@ def kmp_search(text: str, pattern: str) -> list[int]:
             pattern_pointer += 1
 
             if pattern_pointer == pattern_length:
-                result.append(text_pointer - pattern_pointer)
+                matches.append(text_pointer - pattern_pointer)
                 pattern_pointer = lps[pattern_pointer - 1]
         else:
             if pattern_pointer != 0:
@@ -27,7 +27,7 @@ def kmp_search(text: str, pattern: str) -> list[int]:
             else:
                 text_pointer += 1
 
-    return result
+    return matches
 
 
 def _generate_lps_list(pattern: str) -> list[int]:
