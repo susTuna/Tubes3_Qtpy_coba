@@ -31,9 +31,9 @@ def kmp_search(text: str, pattern: str) -> list[int]:
 
 
 def _generate_lps_list(pattern: str) -> list[int]:
-    lps = [0] * len(pattern)
-    length = 0
-    pointer = 1 # lsp[0] is always 0, start from index 1
+    lps: list[int] = [0] * len(pattern)
+    length: int = 0
+    pointer: int = 1 # lsp[0] is always 0, start from index 1
 
     while pointer < len(pattern):
         if pattern[pointer] == pattern[length]:
