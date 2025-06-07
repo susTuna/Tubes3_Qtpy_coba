@@ -10,22 +10,22 @@ def kmp_search(text: str, pattern: str) -> list[int]:
     if pattern_length > text_length:
         return matches
 
-    text_pointer: int = 0
-    pattern_pointer: int = 0
+    text_index: int = 0
+    pattern_index: int = 0
 
-    while text_pointer < text_length:
-        if text[text_pointer] == pattern[pattern_pointer]:
-            text_pointer += 1
-            pattern_pointer += 1
+    while text_index < text_length:
+        if text[text_index] == pattern[pattern_index]:
+            text_index += 1
+            pattern_index += 1
 
-            if pattern_pointer == pattern_length:
-                matches.append(text_pointer - pattern_pointer)
-                pattern_pointer = lps[pattern_pointer - 1]
+            if pattern_index == pattern_length:
+                matches.append(text_index - pattern_index)
+                pattern_index = lps[pattern_index - 1]
         else:
-            if pattern_pointer != 0:
-                pattern_pointer = lps[pattern_pointer - 1]
+            if pattern_index != 0:
+                pattern_index = lps[pattern_index - 1]
             else:
-                text_pointer += 1
+                text_index += 1
 
     return matches
 
