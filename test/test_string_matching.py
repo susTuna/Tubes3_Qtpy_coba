@@ -1,5 +1,5 @@
 import pytest # type: ignore
-from src.algorithms.aho_corasick import AhoCorasick, _build_automaton, _search_multiple_patterns
+from src.algorithms.aho_corasick import AhoCorasick
 from src.algorithms.kmp import kmp_search, _generate_lps_list
 from src.algorithms.boyer_moore import boyer_moore_simple, boyer_moore_complex
 
@@ -336,25 +336,6 @@ class TestAhoCorasick:
         # Test when no match is found
         result = self.ac.find_first_match("goodbye universe")
         assert result is None
-
-    def test_convenience_functions(self):
-        """Test the convenience functions."""
-        patterns = ["cat", "dog", "bird"]
-        text = "I have a cat and a dog but no bird"
-        
-        # Test _build_automaton
-        ac = _build_automaton(patterns)
-        result = ac.search(text)
-        expected = [
-            (9, 11, "cat"),
-            (19, 21, "dog"),
-            (30, 33, "bird")
-        ]
-        assert sorted(result) == sorted(expected)
-        
-        # Test _search_multiple_patterns
-        result = _search_multiple_patterns(text, patterns)
-        assert sorted(result) == sorted(expected)
 
     def test_dna_sequences(self):
         """Test with DNA-like sequences."""
