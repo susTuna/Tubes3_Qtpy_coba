@@ -1,16 +1,35 @@
-def _build_bad_character_table(pattern):
-    bad_char = {}
+def _build_bad_character_table(pattern: str) -> dict[str, int]:
+    """
+    Build the bad character table for Boyer-Moore algorithm.
+
+    Args:
+        pattern (str): The pattern for which to build the bad character table
+
+    Returns:
+        dict[str, int]: Dictionary mapping characters to their rightmost position in pattern
+    """
+    bad_char: dict[str, int] = {}
     for i in range(len(pattern)):
         bad_char[pattern[i]] = i
     return bad_char
 
-def _build_good_suffix_table(pattern):
-    pattern_length = len(pattern)
-    good_suffix = [0] * (pattern_length + 1)
-    border = [0] * (pattern_length + 1)
+def _build_good_suffix_table(pattern: str) -> list[int]:
+    """
+    Build the good suffix table for Boyer-Moore algorithm.
+    
+    Args:
+        pattern (str): The pattern for which to build the good suffix table
+    
+    Returns:
+        list[int]: Array where good_suffix[i] contains the shift value for position i
+    """
+    pattern_length: int = len(pattern)
+    good_suffix: list[int] = [0] * (pattern_length + 1)
+    border: list[int] = [0] * (pattern_length + 1)
 
     # Compute border array (similar to KMP failure function)
-    pattern_index, suffix_index = pattern_length, pattern_length + 1
+    pattern_index: int = pattern_length
+    suffix_index: int = pattern_length + 1
     border[pattern_index] = suffix_index
 
     while pattern_index > 0:
@@ -32,10 +51,20 @@ def _build_good_suffix_table(pattern):
 
     return good_suffix
 
-def boyer_moore_simple(text, pattern):
-    text_length = len(text)
-    pattern_length = len(pattern)
-    matches = []
+def boyer_moore_simple(text: str, pattern: str) -> list[int]:
+    """
+    Boyer-Moore algorithm using only bad character heuristic.
+
+    Args:
+        text (str): The text to search in
+        pattern (str): The pattern to search for
+
+    Returns:
+        list[int]: List of starting indices where pattern is found in text
+    """
+    text_length: int = len(text)
+    pattern_length: int = len(pattern)
+    matches: list[int] = []
 
     if not pattern or not text:
         return matches
@@ -44,11 +73,11 @@ def boyer_moore_simple(text, pattern):
         return matches
 
     # Build bad character table
-    bad_char = _build_bad_character_table(pattern)
+    bad_char: dict[str, int] = _build_bad_character_table(pattern)
 
-    shift = 0
+    shift: int = 0
     while shift <= text_length - pattern_length:
-        pattern_index = pattern_length - 1
+        pattern_index: int = pattern_length - 1
 
         # Match pattern from right to left
         while pattern_index >= 0 and pattern[pattern_index] == text[shift + pattern_index]:
@@ -66,10 +95,20 @@ def boyer_moore_simple(text, pattern):
 
     return matches
 
-def boyer_moore_complex(text, pattern):
-    text_length = len(text)
-    pattern_length = len(pattern)
-    matches = []
+def boyer_moore_complex(text: str, pattern: str) -> list[int]:
+    """
+    Boyer-Moore algorithm using both bad character and good suffix heuristics.
+
+    Args:
+        text (str): The text to search in
+        pattern (str): The pattern to search for
+
+    Returns:
+        List[int]: List of starting indices where pattern is found in text
+    """
+    text_length: int = len(text)
+    pattern_length: int = len(pattern)
+    matches: list[int] = []
 
     if not pattern or not text:
         return matches
@@ -78,12 +117,12 @@ def boyer_moore_complex(text, pattern):
         return matches
 
     # Build bad character and good suffix tables
-    bad_char = _build_bad_character_table(pattern)
-    good_suffix = _build_good_suffix_table(pattern)
+    bad_char: dict[str, int] = _build_bad_character_table(pattern)
+    good_suffix: list[int] = _build_good_suffix_table(pattern)
 
-    shift = 0
+    shift: int = 0
     while shift <= text_length - pattern_length:
-        pattern_index = pattern_length - 1
+        pattern_index: int = pattern_length - 1
 
         # Match pattern from right to left
         while pattern_index >= 0 and pattern[pattern_index] == text[shift + pattern_index]:
