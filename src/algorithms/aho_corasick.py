@@ -30,7 +30,7 @@ class AhoCorasick:
         Args:
             pattern (str): The pattern to add
         """
-        if not pattern or len(pattern) == 0:
+        if not pattern:
             return
 
         self.patterns.append(pattern)
@@ -101,11 +101,7 @@ class AhoCorasick:
             list[tuple[int, int, str]]: List of tuples (start_index, end_index, pattern)
                                        representing matches found in the text
         """
-        if not text:
-            return []
-        
-        valid_patterns: list[str] = [p for p in self.patterns if p and len(p) > 0]
-        if not valid_patterns:
+        if not text or not self.patterns:
             return []
 
         # Build the automaton if not already built
@@ -198,3 +194,29 @@ class AhoCorasick:
                 return (start_index, i, pattern)
 
         return None
+
+    def get_patterns(self) -> list[str]:
+        """
+        Get all valid patterns (excluding empty ones).
+    
+        Returns:
+            list[str]: List of valid patterns
+        """
+        return [p for p in self.patterns if p and len(p) > 0]
+
+    def get_pattern_count(self) -> int:
+        """
+        Get the number of valid patterns.
+
+        Returns:
+            int: Number of valid patterns
+        """
+        return len(self.get_patterns())
+
+    def clear(self) -> None:
+        """
+        Clear all patterns and reset the automaton.
+        """
+        self.root = TrieNode()
+        self.patterns = []
+        self._failure_links_built = False

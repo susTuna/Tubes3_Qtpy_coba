@@ -206,9 +206,11 @@ class TestAhoCorasickAlgorithm:
         # Empty text
         self.ac.add_pattern("hello")
         assert self.ac.search("") == []
-        
+        self.ac.clear()
+
         # Empty pattern
         self.ac.add_pattern("")
+        print(self.ac.get_patterns())
         assert self.ac.search("hello world") == []
         
         # No patterns added
