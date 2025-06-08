@@ -9,7 +9,7 @@ Quick Start
 -----------
 For most use cases, use the high-level search functions:
 
-    >>> from algorithms import search_text, fuzzy_search
+    >>> from search_algorithms import search_text, fuzzy_search
     >>>
     >>> # Simple search with automatic exact->fuzzy fallback
     >>> matches = search_text("Hello Python world", ["Python", "Java"])
@@ -39,7 +39,7 @@ SearchEngine
 The main search engine that handles algorithm selection and fallback logic.
 
 Example usage:
-    >>> from algorithms import SearchEngine, SearchConfig, AlgorithmType
+    >>> from search_algorithms import SearchEngine, SearchConfig, AlgorithmType
     >>>
     >>> # Create engine with custom configuration
     >>> config = SearchConfig(
@@ -71,7 +71,7 @@ Individual Algorithm Usage
 
 If you need to use specific algorithms directly:
 
-    >>> from algorithms import create_searcher
+    >>> from search_algorithms import create_searcher
     >>>
     >>> # Create specific algorithm instances
     >>> kmp_searcher = create_searcher('kmp')
@@ -116,7 +116,7 @@ Performance Guidelines
 - **Mixed requirements**: SearchEngine with fallback
 
 **Performance comparison** (run benchmark to get actual numbers):
-    >>> from algorithms import SearchEngine
+    >>> from search_algorithms import SearchEngine
     >>> engine = SearchEngine()
     >>> timing_results = engine.benchmark_algorithms(your_text, your_patterns)
     >>> for algo, time_taken in timing_results.items():
@@ -168,7 +168,7 @@ Integration with GUI
 The package is designed to work seamlessly with PyQt6 GUIs:
 
     >>> # In your GUI controller
-    >>> from algorithms import SearchEngine, SearchConfig
+    >>> from search_algorithms import SearchEngine, SearchConfig
     >>>
     >>> class SearchController:
     ...     def __init__(self):

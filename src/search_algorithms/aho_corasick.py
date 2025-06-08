@@ -1,7 +1,7 @@
 from collections import deque
 from typing import Dict, List, Optional
 
-from algorithms.pattern_searcher import PatternSearcher, SearchMatch
+from pattern_searcher import PatternSearcher, SearchMatch
 
 
 class TrieNode:
