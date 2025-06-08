@@ -1,13 +1,18 @@
-from collections import deque, defaultdict
-from typing import Optional
+from collections import deque
+from typing import Dict, List, Optional
+
+from algorithms.pattern_searcher import PatternSearcher, SearchMatch
+
 
 class TrieNode:
     """Node class for the Trie structure used in Aho-Corasick algorithm."""
+
     def __init__(self) -> None:
-        self.children: dict[str, 'TrieNode'] = {}  # Dictionary to store child nodes
-        self.failure: Optional['TrieNode'] = None  # Failure link for Aho-Corasick
-        self.output: list[str] = []     # List of patterns that end at this node
+        self.children: Dict[str, "TrieNode"] = {}  # Dictionary to store child nodes
+        self.failure: Optional["TrieNode"] = None  # Failure link for Aho-Corasick
+        self.output: List[str] = []  # List of patterns that end at this node
         self.is_end: bool = False  # Flag to mark end of a pattern
+
 
 class AhoCorasick:
     """
@@ -18,15 +23,16 @@ class AhoCorasick:
     2. Construct failure links (similar to KMP failure function)
     3. Search for all patterns in the text using the automaton
     """
+
     def __init__(self) -> None:
         self.root: TrieNode = TrieNode()
-        self.patterns: list[str] = []  # Store original patterns for reference
+        self.patterns: List[str] = []  # Store original patterns for reference
         self._failure_links_built: bool = False
 
     def add_pattern(self, pattern: str) -> None:
         """
         Add a pattern to the trie.
-        
+
         Args:
             pattern (str): The pattern to add
         """
@@ -48,7 +54,7 @@ class AhoCorasick:
 
         self._failure_links_built = False
 
-    def build_failure_links(self) -> None:
+    def _build_failure_links(self) -> None:
         """
         Build failure links for the Aho-Corasick automaton.
 
@@ -89,8 +95,8 @@ class AhoCorasick:
                     child.output.extend(child.failure.output)
 
         self._failure_links_built = True
-    
-    def search(self, text: str) -> list[tuple[int, int, str]]:
+
+    def search(self, text: str) -> List[tuple[int, int, str]]:
         """
         Search for all patterns in the given text.
 
@@ -98,16 +104,16 @@ class AhoCorasick:
             text (str): The text to search in
 
         Returns:
-            list[tuple[int, int, str]]: List of tuples (start_index, end_index, pattern)
+            List[tuple[int, int, str]]: List of tuples (start_index, end_index, pattern)
                                        representing matches found in the text
         """
         if not text or not self.patterns:
             return []
 
         # Build the automaton if not already built
-        self.build_failure_links()
+        self._build_failure_links()
 
-        matches: list[tuple[int, int, str]] = []
+        matches: List[tuple[int, int, str]] = []
         current_node: Optional[TrieNode] = self.root
 
         for i, char in enumerate(text):
@@ -130,93 +136,60 @@ class AhoCorasick:
 
         return matches
 
-    def search_all_positions(self, text: str) -> dict[str, list[tuple[int, int]]]:
-        """
-        Search for all patterns and return detailed position information.
 
-        Args:
-            text (str): The text to search in
+class AhoCorasickSearcher(PatternSearcher):
+    """Aho-Corasick algorithm with caching for repeated pattern sets."""
 
-        Returns:
-            dict[str, list[tuple[int, int]]]: Dictionary with pattern as key 
-                                              and list of (start, end) positions as value
-        """
-        matches: list[tuple[int, int, str]] = self.search(text)
-        result: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    def __init__(self):
+        self._ac_instance: Optional[AhoCorasick] = None
+        self._cached_patterns: List[str] = []
 
-        for start, end, pattern in matches:
-            result[pattern].append((start, end))
+    def search_multiple(self, text: str, patterns: List[str]) -> List[SearchMatch]:
+        """Search for multiple patterns using Aho-Corasick algorithm."""
+        if not text or not patterns:
+            return []
 
-        return dict(result)
+        # Filter out empty patterns
+        valid_patterns = [p for p in patterns if p and len(p.strip()) > 0]
+        if not valid_patterns:
+            return []
 
-    def contains_any(self, text: str) -> bool:
-        """
-        Check if text contains any of the patterns.
+        # Check if we need to rebuild the automaton
+        if self._ac_instance is None or set(self._cached_patterns) != set(
+            valid_patterns
+        ):
+            self._build_automaton(valid_patterns)
 
-        Args:
-            text (str): The text to check
+        # Perform search
+        raw_matches = self._ac_instance.search(text)  # type: ignore
+        matches: List[SearchMatch] = []
 
-        Returns:
-            bool: True if any pattern is found, False otherwise
-        """
-        return len(self.search(text)) > 0
+        for start_pos, end_pos, pattern in raw_matches:
+            match = SearchMatch(
+                pattern=pattern, start_pos=start_pos, end_pos=end_pos, similarity=1.0
+            )
+            matches.append(match)
 
-    def find_first_match(self, text: str) -> Optional[tuple[int, int, str]]:
-        """
-        Find the first occurrence of any pattern in the text.
+        # Sort by position, then by pattern for deterministic results
+        matches.sort(key=lambda x: (x.start_pos, x.pattern))
+        return matches
 
-        Args:
-            text (str): The text to search in
+    def _build_automaton(self, patterns: List[str]) -> None:
+        """Build or rebuild the Aho-Corasick automaton."""
+        self._ac_instance = AhoCorasick()
+        for pattern in patterns:
+            self._ac_instance.add_pattern(pattern)
+        self._cached_patterns = patterns.copy()
 
-        Returns:
-            Optional[Tuple[int, int, str]]: (start_index, end_index, pattern) of first match,
-                                          or None if no match found
-        """
-        if not text or not self.patterns:
-            return None
+    def clear_cache(self) -> None:
+        """Clear the cached automaton."""
+        self._ac_instance = None
+        self._cached_patterns = []
 
-        self.build_failure_links()
-        current_node: Optional[TrieNode] = self.root
+    @property
+    def algorithm_name(self) -> str:
+        return "Aho-Corasick"
 
-        for i, char in enumerate(text):
-            while current_node is not None and char not in current_node.children:
-                current_node = current_node.failure
-
-            if current_node is None:
-                current_node = self.root
-                continue
-
-            current_node = current_node.children[char]
-
-            if current_node.output:
-                pattern: str = current_node.output[0]
-                start_index: int = i - len(pattern) + 1
-                return (start_index, i, pattern)
-
-        return None
-
-    def get_patterns(self) -> list[str]:
-        """
-        Get all valid patterns (excluding empty ones).
-    
-        Returns:
-            list[str]: List of valid patterns
-        """
-        return [p for p in self.patterns if p and len(p) > 0]
-
-    def get_pattern_count(self) -> int:
-        """
-        Get the number of valid patterns.
-
-        Returns:
-            int: Number of valid patterns
-        """
-        return len(self.get_patterns())
-
-    def clear(self) -> None:
-        """
-        Clear all patterns and reset the automaton.
-        """
-        self.root = TrieNode()
-        self.patterns = []
-        self._failure_links_built = False
+    @property
+    def is_exact_match(self) -> bool:
+        return True
