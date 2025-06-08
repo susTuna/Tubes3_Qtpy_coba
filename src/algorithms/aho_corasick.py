@@ -30,7 +30,7 @@ class AhoCorasick:
         Args:
             pattern (str): The pattern to add
         """
-        if not pattern:
+        if not pattern or len(pattern) == 0:
             return
 
         self.patterns.append(pattern)
@@ -101,7 +101,11 @@ class AhoCorasick:
             list[tuple[int, int, str]]: List of tuples (start_index, end_index, pattern)
                                        representing matches found in the text
         """
-        if not text or not self.patterns:
+        if not text:
+            return []
+        
+        valid_patterns: list[str] = [p for p in self.patterns if p and len(p) > 0]
+        if not valid_patterns:
             return []
 
         # Build the automaton if not already built
