@@ -8,6 +8,24 @@ SECTION_KEYWORDS = {
     "skills":        ["skills", "expertise", "technologies"]
 }
 
+def clean_text(text: str) -> str:
+    """
+    Remove all characters except:
+    - Letters (a-z, A-Z)
+    - Numbers (0-9)
+    - Common punctuation and symbols from a standard keyboard
+    - Whitespace (space, tab, newline)
+    """
+    if not text:
+        return ""
+    
+    # Keep only standard keyboard characters
+    # This includes letters, numbers, punctuation, and whitespace
+    pattern = r'[^a-zA-Z0-9\s.,!?;:\'"`@#$%^&*()_+={}\[\]|\\/<>~-]'
+    
+    # Replace non-matching characters with space
+    return re.sub(pattern, '', text)
+
 def parse_for_regex(text: str) -> List[str]:
     """
     Parse the text line by line while keeping the original format.
@@ -16,6 +34,8 @@ def parse_for_regex(text: str) -> List[str]:
     if not text:
         return []
     
+    text = clean_text(text)
+
     # Split by newline and preserve empty lines
     lines = [line.rstrip() for line in text.split('\n')]
     return lines
@@ -27,6 +47,7 @@ def parse_text(text: str) -> str:
     if not text:
         return ""
     
+    text = clean_text(text)
     # Convert to lowercase, replace newlines with spaces, normalize whitespace
     text = text.lower()
     text = text.replace('\n', ' ')

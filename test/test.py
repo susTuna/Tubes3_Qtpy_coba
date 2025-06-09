@@ -5,6 +5,8 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 from src.database.ingest import seed_from_csv
 from src.database.models import init_db, dump_db
 from src.database.setup import setup_db
+from src.database.parser import parse_for_regex, parse_text
+from src.database.pdf_utils import extract_text_from_pdf
 from src.config.config import DB_PATH
 
 def setup():
@@ -41,10 +43,21 @@ def dump():
         print("Database export failed.")
         exit(1)
 
-if __name__ == "__main__":
-    setup()
-    init()
-    seed()
-    dump()
-    print("Database setup, initialization, and seeding complete!")
+def parse():
+    text = extract_text_from_pdf("data/98559931.pdf")
 
+    regex = parse_for_regex(text)
+    print("Parsed text with regex:")
+    for line in regex:
+        print(line)
+    print("\n Parsed text: ")
+    parsed_text = parse_text(text)
+    print(parsed_text)
+
+if __name__ == "__main__":
+    # setup()
+    # init()
+    # seed()
+    # dump()
+    # print("Database setup, initialization, and seeding complete!")
+    parse()
