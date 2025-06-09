@@ -1,33 +1,42 @@
 from sqlalchemy import (
-    Column, Integer, String, Date, Text, create_engine
+    Column, ForeignKey, Integer, String, Date, Text, create_engine
 )
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from config.config import DB_CONN
 
 Base = declarative_base()
 
-class Resume(Base):
-    __tablename__ = "resumes"
+class ApplicantProfile(Base):
+    __tablename__ = "ApplicantProfile"
+    
+    applicant_id     = Column(Integer, primary_key=True, autoincrement=True)
+    first_name       = Column(String(50))
+    last_name        = Column(String(50))
+    birthdate        = Column(Date)
+    address          = Column(String(255))
+    phone            = Column(String(20))
 
-    id               = Column(Integer, primary_key=True, autoincrement=True)
-    resume_id        = Column(String, unique=True, nullable=False)   # your “ID” / file name
-    resume_str       = Column(Text, nullable=False)
-    resume_html      = Column(Text, nullable=False)
-    category         = Column(String, nullable=False)
+    applications = relationship(
+        "ApplicationDetail",
+        back_populates="applicant",
+        cascade="all, delete-orphan"
+    )
 
-    # additional fields
-    applicant_id     = Column(String, nullable=True)
-    name             = Column(String, nullable=True)
-    phone            = Column(String, nullable=True)
-    birthdate        = Column(Date,   nullable=True)
-    address          = Column(String, nullable=True)
-    job_history      = Column(Text,   nullable=True)
-    education        = Column(Text,   nullable=True)
-    skills           = Column(Text,   nullable=True)
-    cv_file_name     = Column(String, nullable=False)
+class ApplicationDetail(Base):
+    __tablename__ = "ApplicationDetail"
+    detail_id        = Column(Integer, primary_key=True, autoincrement=True)
+    applicant_id     = Column(Integer, ForeignKey('applicant_profile.applicant_id'), nullable=False)
+    applicant_role   = Column(String(100))
+    cv_file_name     = Column(Text)
+
+    applicant = relationship("ApplicantProfile", back_populates="applications")
+
+
 
 # create an engine and session factory
-engine = create_engine("sqlite:///resumes.db", echo=True, future=True)
+engine = create_engine(DB_CONN, echo=True, future=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    print("Database initialized!")
