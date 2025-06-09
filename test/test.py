@@ -3,8 +3,9 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 from src.database.ingest import seed_from_csv
-from src.database.models import init_db
+from src.database.models import init_db, dump_db
 from src.database.setup import setup_db
+from src.config.config import DB_PATH
 
 def setup():
     print("Setting up the database...")
@@ -30,9 +31,20 @@ def seed():
         print("Database seeding failed.")
         exit(1)
 
+def dump():
+    DB_SCHEMA = f"{DB_PATH}/tubes3_schema.sql"
+    DB_FILE   = f"{DB_PATH}/tubes3.sql"
+    print("Exporting the database to a SQL file...")
+    if dump_db(DB_SCHEMA) and dump_db(DB_FILE, False):
+        print("Database exported successfully.")
+    else:
+        print("Database export failed.")
+        exit(1)
+
 if __name__ == "__main__":
     setup()
     init()
     seed()
+    dump()
     print("Database setup, initialization, and seeding complete!")
 
