@@ -1,5 +1,5 @@
 import pandas as pd
-import io
+import kagglehub
 import os
 from datetime import datetime, timedelta
 import random
@@ -7,40 +7,42 @@ from faker import Faker
 from .models import ApplicationDetail, ApplicantProfile, SessionLocal
 from ..config.config import KAGGLE_USER, KAGGLE_KEY
 
-fake = Faker()
+fake = Faker('id_ID')
 
 def load_kaggle():
-    """Load Kaggle dataset directly into memory without downloading files to disk"""
-    # Initialize the Kaggle API
-    os.environ["KAGGLE_USERNAME"] = KAGGLE_USER
-    print(f"KAGGLE_USERNAME set to: {KAGGLE_USER}")
-    os.environ["KAGGLE_KEY"] = KAGGLE_KEY
-    print(f"KAGGLE_KEY set to: {KAGGLE_KEY}")
-
-    from kaggle.api.kaggle_api_extended import KaggleApi
-
-    api = KaggleApi()
-    api.authenticate()
+    """Load Kaggle dataset with caching to avoid redownloading"""
+    print("Loading data from Kaggle...")
     
-    # Get dataset file list
-    files = api.dataset_list_files("snehaanbhawal/resume-dataset").files
+    # Define the known path to the CSV file
+    home_dir = os.path.expanduser("~")
+    cached_csv_path = os.path.join(home_dir, ".cache/kagglehub/datasets/snehaanbhawal/resume-dataset/versions/1/Resume/Resume.csv")
     
-    # Find the CSV file
-    csv_file = next((f.name for f in files if f.name.endswith('.csv')), None)
+    # Check if the CSV file already exists
+    if os.path.exists(cached_csv_path):
+        print(f"Using cached file: {cached_csv_path}")
+        df = pd.read_csv(cached_csv_path)
+        print(f"Loaded {len(df)} records from cached file")
+        return df
     
-    if not csv_file:
-        raise FileNotFoundError("No CSV file found in the dataset")
+    # If not found, download from Kaggle
+    print("Cached file not found. Downloading from Kaggle...")
+    path = kagglehub.dataset_download("snehaanbhawal/resume-dataset")
+    print(f"Dataset downloaded to: {path}")
     
-    # Get the file content directly
-    response = api.dataset_download_file(
-        dataset="snehaanbhawal/resume-dataset", 
-        file_name=csv_file,
-        quiet=False
-    )
+    # Find CSV files in the downloaded path
+    csv_files = []
+    for root, _, files in os.walk(path):
+        for file in files:
+            if file.endswith('.csv'):
+                csv_files.append(os.path.join(root, file))
     
-    # Load directly into pandas from memory
-    df = pd.read_csv(io.StringIO(response.text), encoding='utf-8')
-    print(f"Loaded {len(df)} records directly from Kaggle")
+    if not csv_files:
+        raise FileNotFoundError(f"No CSV files found in {path}")
+    
+    # Load the first CSV file found
+    csv_path = csv_files[0]
+    df = pd.read_csv(csv_path)
+    print(f"Loaded {len(df)} records from {os.path.basename(csv_path)}")
     
     return df
 
@@ -80,7 +82,7 @@ def seed_from_csv():
                         last_name  = fake.last_name(),
                         birthdate  = generate_random_date(),
                         address    = fake.address().replace('\n', ', '),
-                        phone      = fake.phone_number()
+                        phone      = fake.numerify(text="+62-8##-####-####")
                     )
                     
                     db.add(profile)
