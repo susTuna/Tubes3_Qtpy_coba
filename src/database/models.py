@@ -1,6 +1,9 @@
 from sqlalchemy import (
     Column, ForeignKey, Integer, String, Date, Text, text, create_engine
 )
+import os
+import subprocess
+from datetime import datetime
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from ..config.config import DB_CONN
 
@@ -50,11 +53,47 @@ def init_db() -> bool:
         print(f"Database initialization failed: {str(e)}")
         return False
 
-def dump_db() -> bool:
+def dump_db(output_path=None, schema = True) -> bool:
+    """
+    Export the database to a SQL file
+    """
     try:
-        Base.metadata.drop_all(bind=engine)
-        print("Database dumped successfully!")
+        # Extract database configuration from connection string
+        from urllib.parse import urlparse
+        parsed = urlparse(DB_CONN)
+        
+        # Extract components from the connection string
+        username = parsed.username
+        password = parsed.password
+        host = parsed.hostname
+        port = parsed.port or 3306
+        database = parsed.path.strip('/')
+        
+        # Default output path
+        if not output_path:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"{database}_backup_{timestamp}.sql"
+        
+        # Build mysqldump command
+        cmd = f"mysqldump -h {host} -P {port} -u {username} --password={password} {'-d' if schema else ''} --databases {database} > {output_path}"
+        
+        # Execute command
+        process = subprocess.Popen(
+            cmd,
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = process.communicate()
+        
+        if process.returncode != 0:
+            print(f"Export failed: {stderr.decode()}")
+            return False
+        
+        print(f"Database {"schema " if schema else ""}exported successfully to: {output_path}")
+        print(f"File size: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
         return True
+    
     except Exception as e:
-        print(f"Database dump failed: {str(e)}")
+        print(f"Database export failed: {str(e)}")
         return False
