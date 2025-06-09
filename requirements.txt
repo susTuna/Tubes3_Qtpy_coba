@@ -1,0 +1,6 @@
+PyQt6
+databases
+sqlalchemy
+kaggle[pandas-datasets]
+pandas
+pdfplumber
