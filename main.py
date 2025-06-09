@@ -1,9 +1,9 @@
 import os
-from src.database.models import SessionLocal, Resume, init_db
+from src.database.models import SessionLocal, ApplicationDetail, ApplicantProfile, init_db
 from src.database.pdf_utils import extract_text_from_pdf
 from src.database.parser import parse_sections
 
-CV_FOLDER = "./cvs"  # point this at your folder of PDF CVs
+from config.config import CV_FOLDER
 
 def process_folder_and_update():
     init_db()
@@ -25,9 +25,9 @@ def process_folder_and_update():
         secs = parse_sections(full_text)
 
         # upsert into DB (or create new)
-        cv = db.query(Resume).filter_by(resume_id=applicant_id).first()
+        cv = db.query(ApplicationDetail).filter_by(resume_id=applicant_id).first()
         if not cv:
-            cv = Resume(resume_id=applicant_id, cv_file_name=filename)
+            cv = ApplicationDetail(resume_id=applicant_id, cv_file_name=filename)
             db.add(cv)
 
         cv.applicant_id = applicant_id
@@ -43,4 +43,4 @@ def process_folder_and_update():
 
 if __name__ == "__main__":
     process_folder_and_update()
-    print("✅ PDF extraction & parsing complete!")
+    print("PDF extraction & parsing complete!")

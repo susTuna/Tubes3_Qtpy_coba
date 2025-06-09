@@ -1,5 +1,5 @@
 import re
-from typing import Dict
+from typing import Dict, List
 
 # define some simple section-keywords
 SECTION_KEYWORDS = {
@@ -7,6 +7,31 @@ SECTION_KEYWORDS = {
     "education":     ["education", "academic", "degree"],
     "skills":        ["skills", "expertise", "technologies"]
 }
+
+def parse_for_regex(text: str) -> List[str]:
+    """
+    Parse the text line by line while keeping the original format.
+    Including empty lines.
+    """
+    if not text:
+        return []
+    
+    # Split by newline and preserve empty lines
+    lines = [line.rstrip() for line in text.split('\n')]
+    return lines
+
+def parse_text(text: str) -> str:
+    """
+    Parse the entire text into a single lowercase string.
+    """
+    if not text:
+        return ""
+    
+    # Convert to lowercase, replace newlines with spaces, normalize whitespace
+    text = text.lower()
+    text = text.replace('\n', ' ')
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 def parse_sections(full_text: str) -> Dict[str, str]:
     """

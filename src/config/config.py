@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+
 load_dotenv()
 
 DB_CONFIG = {
@@ -13,3 +15,8 @@ DB_CONFIG = {
 
 DB_CONN = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@" \
           f"{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+
+CV_FOLDER = os.path.join(PROJECT_ROOT, "./data")
+
+KAGGLE_USER = os.getenv("KAGGLE_USERNAME", "")
+KAGGLE_KEY = os.getenv("KAGGLE_KEY", "")
