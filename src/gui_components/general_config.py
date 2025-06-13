@@ -202,6 +202,8 @@ class GUIConfig:
         self.fonts = FontConfig()
         self.spacing = SpacingConfig()
         self.header = HeaderConfig()
+        self.search = SearchConfig()
+        self.result = ResultConfig()
         self._custom_themes: Dict[str, ColorTheme] = {}
     
     def set_theme(self, theme_name: str) -> None:
