@@ -44,7 +44,7 @@ def dump():
         exit(1)
 
 def parse():
-    text = extract_text_from_pdf("data/98559931.pdf")
+    text = extract_text_from_pdf("data/10276858.pdf")
 
     regex = parse_for_regex(text)
     print("Parsed text with regex:")
