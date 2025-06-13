@@ -31,14 +31,14 @@ class MainWindow(QMainWindow):
         self.search_service = SearchService(self)
 
         # --- Connect the search button's click signal to the on_search method ---
-        self.search_section.search_button.clicked.connect(self.on_search)
+        self.search_section.search_btn.clicked.connect(self.on_search)
 
     def on_search(self):
         """
         This method is called when the user clicks the search button.
         It gets the user's input and tells the SearchService to start.
         """
-        keyword = self.search_section.keyword_input.text()
+        keyword = self.search_section.keywords_input.text()
         search_type = self.search_section.algorithm_combo.currentText()
         top_k = self.search_section.top_k_spinbox.value()
 
