@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,  # type: ignore
                             QScrollArea, QFrame, QPushButton, QTextEdit,
-                            QProgressBar, QSplitter, QMessageBox, QFileDialog)
+                            QProgressBar, QSplitter, QMessageBox, QFileDialog, QGridLayout)
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve # type: ignore
 from PyQt6.QtGui import QFont, QPalette # type: ignore
 from typing import Optional, List, Dict, Any
@@ -49,61 +49,63 @@ class ConfigurableResultCard(QFrame):
         )
         layout.setSpacing(self.gui_config.spacing.margin_small)
         
-        # Header with match info
-        header_layout = QHBoxLayout()
+        # Applicant name header (from the image reference)
+        applicant_name = self.match_data.get('applicant_name', 'Applicant')
+        name_label = QLabel(applicant_name)
+        name_label.setObjectName("applicantNameLabel")
         
-        # Pattern/keyword found
-        pattern_text = self.match_data.get('pattern', 'N/A')
-        pattern_label = QLabel(f"🎯 Pattern: '{pattern_text}'")
-        pattern_label.setObjectName("cardPatternLabel")
+        name_font = QFont(self.gui_config.fonts.family_primary)
+        name_font.setBold(True)
+        name_font.setPointSize(self.gui_config.fonts.size_large)
+        name_label.setFont(name_font)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        pattern_font = QFont(self.gui_config.fonts.family_primary)
-        pattern_font.setBold(True)
-        pattern_font.setPointSize(self.gui_config.fonts.size_medium)
-        pattern_label.setFont(pattern_font)
+        # Matched keywords section
+        keywords_label = QLabel("Matched keywords:")
+        keywords_label.setObjectName("matchedKeywordsLabel")
+        keywords_label.setFont(QFont(self.gui_config.fonts.family_primary, weight=QFont.Weight.Bold))
         
-        # Position info
-        start_pos = self.match_data.get('start_pos', 0)
-        end_pos = self.match_data.get('end_pos', 0)
-        position_label = QLabel(f"📍 Position: {start_pos}-{end_pos}")
-        position_label.setObjectName("cardPositionLabel")
+        # Create the matched keywords list
+        keywords_layout = QVBoxLayout()
+        keywords_layout.setSpacing(5)
         
-        header_layout.addWidget(pattern_label)
-        header_layout.addStretch()
-        header_layout.addWidget(position_label)
-        
-        # Similarity/confidence (for fuzzy search)
-        if 'similarity' in self.match_data and self.config.show_similarity_score:
-            similarity = self.match_data['similarity']
-            similarity_label = QLabel(f"💯 Similarity: {similarity:.1%}")
-            similarity_label.setObjectName("cardSimilarityLabel")
-            header_layout.addWidget(similarity_label)
-        
-        # Context snippet
-        snippet = self.match_data.get('snippet', '')
-        if snippet:
-            snippet_label = QLabel("📝 Context:")
-            snippet_label.setObjectName("cardSnippetLabel")
+        # Get the keyword occurrences (assuming they're provided in match_data)
+        keyword_occurrences = self.match_data.get('keyword_occurrences', {})
+        if not keyword_occurrences and 'pattern' in self.match_data:
+            # Fallback: use the pattern field if keyword_occurrences not provided
+            pattern = self.match_data.get('pattern', '')
+            keyword_occurrences = {pattern: 1}
             
-            # Truncate snippet if too long
-            if len(snippet) > self.config.max_snippet_length:
-                snippet = snippet[:self.config.max_snippet_length] + "..."
+        # Add each keyword with its occurrence count
+        for keyword, count in keyword_occurrences.items():
+            occurrence_text = f"{count} occurrence{'s' if count > 1 else ''}"
+            keyword_item = QLabel(f"• {keyword}: {occurrence_text}")
+            keyword_item.setObjectName("keywordItem")
+            keywords_layout.addWidget(keyword_item)
             
-            snippet_text = QTextEdit()
-            snippet_text.setObjectName("cardSnippetText")
-            snippet_text.setPlainText(snippet)
-            snippet_text.setReadOnly(True)
-            snippet_text.setMaximumHeight(self.config.snippet_height)
-            
-            # Apply highlighting if enabled
-            if self.config.show_pattern_highlighting:
-                self._highlight_pattern_in_snippet(snippet_text, pattern_text)
-            
-            layout.addLayout(header_layout)
-            layout.addWidget(snippet_label)
-            layout.addWidget(snippet_text)
-        else:
-            layout.addLayout(header_layout)
+        # Add buttons for actions (from image reference)
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        
+        details_btn = QPushButton("Details")
+        details_btn.setObjectName("detailsBtn")
+        
+        view_cv_btn = QPushButton("View CV")
+        view_cv_btn.setObjectName("viewCVBtn")
+        
+        buttons_layout.addWidget(details_btn)
+        buttons_layout.addWidget(view_cv_btn)
+        
+        # Add all elements to the main layout
+        layout.addWidget(name_label)
+        layout.addWidget(keywords_label)
+        layout.addLayout(keywords_layout)
+        layout.addStretch(1)
+        layout.addLayout(buttons_layout)
+        
+        # Connect button signals
+        details_btn.clicked.connect(lambda: self.card_clicked.emit(self.match_data))
+        view_cv_btn.clicked.connect(lambda: self.card_double_clicked.emit(self.match_data))
     
     def _highlight_pattern_in_snippet(self, text_edit: QTextEdit, pattern: str) -> None:
         """Highlight the pattern in the snippet text."""
@@ -150,40 +152,48 @@ class ConfigurableResultCard(QFrame):
                 background-color: {self.gui_config.colors.bg_secondary};
             }}
             """
-        
+    
         # Label styles
         label_styles = f"""
-        QLabel#cardPatternLabel {{
-            color: {self.gui_config.colors.text_primary};
-        }}
-        QLabel#cardPositionLabel {{
-            color: {self.gui_config.colors.text_secondary};
-            font-weight: bold;
-        }}
-        QLabel#cardSimilarityLabel {{
-            color: {self.gui_config.colors.success};
-            font-weight: bold;
-        }}
-        QLabel#cardSnippetLabel {{
+        QLabel#applicantNameLabel {{
             color: {self.gui_config.colors.text_primary};
             font-weight: bold;
-            margin-top: {self.gui_config.spacing.margin_small}px;
-        }}
-        """
-        
-        # Snippet text style
-        snippet_style = f"""
-        QTextEdit#cardSnippetText {{
-            border: {self.gui_config.spacing.border_width_thin}px solid {self.gui_config.colors.border_light};
-            border-radius: {self.gui_config.spacing.border_radius_medium}px;
+            margin-bottom: {self.gui_config.spacing.margin_medium}px;
             background-color: {self.gui_config.colors.bg_secondary};
+            border-radius: {self.gui_config.spacing.border_radius_medium}px;
             padding: {self.gui_config.spacing.padding_small}px;
-            font-family: {self.gui_config.fonts.family_monospace};
-            font-size: {self.gui_config.fonts.size_small}pt;
+        }}
+        QLabel#matchedKeywordsLabel {{
+            color: {self.gui_config.colors.text_primary};
+            font-weight: bold;
+        }}
+        QLabel#keywordItem {{
+            color: {self.gui_config.colors.text_secondary};
+            padding-left: {self.gui_config.spacing.padding_small}px;
         }}
         """
         
-        full_style = base_style + label_styles + snippet_style
+        # Button styles
+        button_styles = f"""
+        QPushButton {{
+            background-color: {self.gui_config.colors.secondary};
+            color: {self.gui_config.colors.text_light};
+            border: none;
+            border-radius: {self.gui_config.spacing.border_radius_medium}px;
+            padding: {self.gui_config.spacing.padding_small}px {self.gui_config.spacing.padding_medium}px;
+        }}
+        QPushButton:hover {{
+            background-color: {self.gui_config.colors.primary};
+        }}
+        QPushButton#detailsBtn {{
+            background-color: {self.gui_config.colors.secondary};
+        }}
+        QPushButton#viewCVBtn {{
+            background-color: {self.gui_config.colors.accent};
+        }}
+        """
+        
+        full_style = base_style + label_styles + button_styles
         
         # Apply custom card style if provided
         if self.config.custom_card_style:
@@ -549,72 +559,86 @@ class ConfigurableResultsSection(QWidget):
     
     def display_results(self, results: List[Dict[str, Any]], search_time: float, search_params: Dict[str, Any]) -> None:
         """Display search results."""
-        self.current_results = results.copy()
-        self.search_time = search_time
-        self.selected_cards.clear()
+        if self.progress_bar:
+            self.progress_bar.setVisible(False)
         
-        # Hide progress
-        self.hide_search_progress()
-        
-        # Clear existing results
+        # Clear previous results
         self.clear_results_display()
+        self.current_results = results
+        self.search_time = search_time
         
         # Update statistics
-        result_count = len(results)
         if self.results_count_label:
-            self.results_count_label.setText(f"📈 Found: {result_count} matches")
+            self.results_count_label.setText(f"Found: {len(results)} matches")
+        
         if self.search_time_label:
             self.search_time_label.setText(f"⏱️ Time: {search_time:.3f}s")
         
-        # Enable action buttons
-        if self.export_btn:
-            self.export_btn.setEnabled(result_count > 0)
-        if self.clear_results_btn:
-            self.clear_results_btn.setEnabled(result_count > 0)
+        # No results
+        if not results:
+            if self.empty_state_label:
+                self.empty_state_label.setText(self.config.no_results_message)
+                self.scroll_layout.addWidget(self.empty_state_label)
+            return
         
-        if result_count == 0:
-            # Show no results message
-            no_results_label = QLabel(
-                f"{self.config.no_results_message}\n"
-                f"Algorithm used: {search_params.get('algorithm', 'Unknown')}"
-            )
-            no_results_label.setObjectName("noResultsLabel")
-            no_results_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            no_results_label.setStyleSheet(f"""
-                QLabel {{
-                    color: {self.gui_config.colors.danger};
-                    font-size: {self.gui_config.fonts.size_medium}pt;
-                    padding: {self.gui_config.spacing.padding_large}px;
-                    background-color: {self.gui_config.colors.bg_secondary};
-                    border-radius: {self.gui_config.spacing.border_radius_large}px;
-                    border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.danger};
-                }}
-            """)
-            self.scroll_layout.addWidget(no_results_label)
-        else:
-            # Remove empty state
-            if self.empty_state_label and self.empty_state_label.parent():
-                self.empty_state_label.setParent(None)
+        # Group results by applicant
+        applicants = {}
+        for result in results:
+            applicant_id = result.get('applicant_id')
+            if not applicant_id:
+                continue
+                
+            if applicant_id not in applicants:
+                applicants[applicant_id] = {
+                    'applicant_name': result.get('applicant_name', f'Applicant {applicant_id}'),
+                    'keyword_occurrences': {}
+                }
             
-            # Add result cards
-            for i, result in enumerate(results):
-                card = ConfigurableResultCard(result, self.config)
-                
-                # Connect card signals
-                card.card_clicked.connect(self._on_card_clicked)
-                card.card_double_clicked.connect(self.result_double_clicked.emit)
-                
-                self.scroll_layout.addWidget(card)
-                
-                # Animate entry if enabled
-                if self.config.enable_animations:
-                    QTimer.singleShot(i * 50, card.animate_entry)  # Stagger animations
+            # Count keyword occurrences
+            pattern = result.get('pattern', '')
+            if pattern:
+                if pattern in applicants[applicant_id]['keyword_occurrences']:
+                    applicants[applicant_id]['keyword_occurrences'][pattern] += 1
+                else:
+                    applicants[applicant_id]['keyword_occurrences'][pattern] = 1
         
+        # Create a grid layout for applicant cards (3 columns)
+        grid_widget = QWidget()
+        grid_layout = QGridLayout(grid_widget)
+        grid_layout.setSpacing(self.gui_config.spacing.margin_medium)
+        
+        # Add cards to grid layout
+        row, col = 0, 0
+        max_cols = 3  # 3 columns as shown in the image
+        
+        for applicant_id, applicant_data in applicants.items():
+            match_data = {
+                'applicant_id': applicant_id,
+                'applicant_name': applicant_data['applicant_name'],
+                'keyword_occurrences': applicant_data['keyword_occurrences']
+            }
+            
+            card = ConfigurableResultCard(match_data, self.config)
+            card.card_clicked.connect(self._on_card_clicked)
+            card.card_double_clicked.connect(lambda data: self.result_double_clicked.emit(data))
+            
+            if self.config.enable_animations:
+                card.animate_entry()
+            
+            grid_layout.addWidget(card, row, col)
+            
+            # Move to next position
+            col += 1
+            if col >= max_cols:
+                col = 0
+                row += 1
+        
+        self.scroll_layout.addWidget(grid_widget)
         self.scroll_layout.addStretch()
         
         # Auto-scroll to results if enabled
-        if self.config.auto_scroll_to_results and result_count > 0:
-            QTimer.singleShot(100, lambda: self.scroll_area.verticalScrollBar().setValue(0))
+        if self.config.auto_scroll_to_results and self.scroll_area:
+            self.scroll_area.verticalScrollBar().setValue(0)
     
     def _on_card_clicked(self, result_data: Dict[str, Any]) -> None:
         """Handle card click events."""
