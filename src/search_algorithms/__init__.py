@@ -229,16 +229,16 @@ Requires: typing, dataclasses, enum (all standard library)
 For more detailed algorithm implementations, see individual module files.
 """
 
-from aho_corasick import AhoCorasickSearcher
-from boyer_moore import BoyerMooreSearcher
-from fuzzy_searcher import FuzzySearcher
+from .aho_corasick import AhoCorasickSearcher
+from .boyer_moore import BoyerMooreSearcher
+from .fuzzy_searcher import FuzzySearcher
 
 # Import individual searcher implementations
-from kmp_searcher import KMPSearcher
+from .kmp_searcher import KMPSearcher
 
 # Import all public interfaces
-from pattern_searcher import PatternSearcher, SearchMatch, SearchStrategy
-from search_engine import (
+from .pattern_searcher import PatternSearcher, SearchMatch, SearchStrategy
+from .search_engine import (
     AlgorithmType,
     SearchConfig,
     SearchEngine,

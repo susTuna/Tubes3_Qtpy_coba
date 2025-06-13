@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from pattern_searcher import PatternSearcher, SearchMatch
+from .pattern_searcher import PatternSearcher, SearchMatch
 
 
 class BoyerMooreSearcher(PatternSearcher):

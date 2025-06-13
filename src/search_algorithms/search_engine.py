@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Union
 
-from aho_corasick import AhoCorasickSearcher
-from boyer_moore import BoyerMooreSearcher
-from fuzzy_searcher import FuzzySearcher
-from kmp_searcher import KMPSearcher
-from pattern_searcher import PatternSearcher, SearchMatch, SearchStrategy
+from .aho_corasick import AhoCorasickSearcher
+from .boyer_moore import BoyerMooreSearcher
+from .fuzzy_searcher import FuzzySearcher
+from .kmp_searcher import KMPSearcher
+from .pattern_searcher import PatternSearcher, SearchMatch, SearchStrategy
 
 
 class AlgorithmType(Enum):

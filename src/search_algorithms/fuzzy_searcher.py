@@ -1,6 +1,6 @@
 from typing import List, Tuple
 
-from pattern_searcher import PatternSearcher, SearchMatch
+from .pattern_searcher import PatternSearcher, SearchMatch
 
 
 class FuzzySearcher(PatternSearcher):
