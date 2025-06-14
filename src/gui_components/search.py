@@ -55,12 +55,9 @@ class ConfigurableSearchControls(QWidget):
         if self.config.show_keywords_section:
             self.setup_keywords_section(layout)
         
-        # Algorithm and parameters section
+        # Algorithm and parameters section (now includes search button)
         if self.config.show_algorithm_section:
             self.setup_algorithm_section(layout)
-        
-        # Search button
-        self.setup_search_button(layout)
     
     def setup_keywords_section(self, parent_layout: QVBoxLayout) -> None:
         """Set up the keywords input section."""
@@ -92,53 +89,16 @@ class ConfigurableSearchControls(QWidget):
         keywords_header.addWidget(keywords_label)
         keywords_header.addStretch()
         
-        # Quick add buttons
-        if self.config.show_quick_add_buttons:
-            self.setup_quick_add_buttons(keywords_header)
-        
         # Keywords input
         self.keywords_input = QLineEdit()
         self.keywords_input.setObjectName("keywordsInput")
         self.keywords_input.setPlaceholderText(self.config.keywords_placeholder)
         
-        # Keywords display area
-        keywords_display_label = QLabel("Keywords to search:")
-        keywords_display_label.setObjectName("keywordsDisplayLabel")
-        
-        # Scrollable keywords display
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setMaximumHeight(self.config.max_keywords_display_height)
-        scroll_area.setObjectName("keywordsScrollArea")
-        
-        self.keywords_display = QTextEdit()
-        self.keywords_display.setObjectName("keywordsDisplay")
-        self.keywords_display.setReadOnly(True)
-        self.keywords_display.setMaximumHeight(self.config.max_keywords_display_height - 20)
-        scroll_area.setWidget(self.keywords_display)
-        
+        # Add everything to the layout
         keywords_layout.addLayout(keywords_header)
         keywords_layout.addWidget(self.keywords_input)
-        keywords_layout.addWidget(keywords_display_label)
-        keywords_layout.addWidget(scroll_area)
         
         parent_layout.addWidget(keywords_frame)
-    
-    def setup_quick_add_buttons(self, layout: QHBoxLayout) -> None:
-        """Set up quick add buttons for keywords."""
-        quick_add_layout = QHBoxLayout()
-        
-        self.add_keyword_btn = QPushButton(self.config.add_keyword_text)
-        self.add_keyword_btn.setObjectName("addKeywordBtn")
-        
-        self.clear_keywords_btn = QPushButton(self.config.clear_keywords_text)
-        self.clear_keywords_btn.setObjectName("clearKeywordsBtn")
-        
-        quick_add_layout.addWidget(self.add_keyword_btn)
-        quick_add_layout.addWidget(self.clear_keywords_btn)
-        quick_add_layout.addStretch()
-        
-        layout.addLayout(quick_add_layout)
     
     def setup_algorithm_section(self, parent_layout: QVBoxLayout) -> None:
         """Set up the algorithm selection and parameters section."""
@@ -165,9 +125,10 @@ class ConfigurableSearchControls(QWidget):
         algorithm_font.setWeight(QFont.Weight(self.gui_config.fonts.weight_bold))
         algorithm_label.setFont(algorithm_font)
         
-        # Algorithm selection row
-        algo_row = QHBoxLayout()
+        # Parameters row - create a single row for all parameters
+        params_row = QHBoxLayout()
         
+        # Algorithm selection (now part of params_row)
         algo_select_label = QLabel("Algorithm:")
         algo_select_label.setObjectName("algorithmSelectLabel")
         algo_select_label.setMinimumWidth(120)
@@ -180,13 +141,14 @@ class ConfigurableSearchControls(QWidget):
         default_index = list(self.config.available_algorithms).index(self.config.default_algorithm)
         self.algorithm_combo.setCurrentIndex(default_index)
         
-        algo_row.addWidget(algo_select_label)
-        algo_row.addWidget(self.algorithm_combo)
-        algo_row.addStretch()
+        params_row.addWidget(algo_select_label)
+        params_row.addWidget(self.algorithm_combo)
         
-        # Parameters row
+        # Add other parameters to the same row
         if self.config.show_search_parameters:
-            params_row = self.setup_search_parameters()
+            self.add_search_parameters_to_row(params_row)
+        
+        params_row.addStretch()
         
         # Algorithm info
         if self.config.show_algorithm_info:
@@ -196,20 +158,29 @@ class ConfigurableSearchControls(QWidget):
             self.update_algorithm_info(self.config.default_algorithm)
         
         algorithm_layout.addWidget(algorithm_label)
-        algorithm_layout.addLayout(algo_row)
-        
-        if self.config.show_search_parameters:
-            algorithm_layout.addLayout(params_row)
+        algorithm_layout.addLayout(params_row)
         
         if self.config.show_algorithm_info:
             algorithm_layout.addWidget(self.algorithm_info)
         
+        # Add search button to algorithm frame
+        button_layout = QHBoxLayout()
+        self.search_btn = QPushButton(self.config.search_button_text)
+        self.search_btn.setObjectName("searchBtn")
+        self.search_btn.setMinimumHeight(50)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(self.search_btn)
+        button_layout.addStretch()
+        
+        # Add some spacing between the algorithm info and search button
+        algorithm_layout.addSpacing(self.gui_config.spacing.margin_medium)
+        algorithm_layout.addLayout(button_layout)
+        
         parent_layout.addWidget(algorithm_frame)
     
-    def setup_search_parameters(self) -> QHBoxLayout:
-        """Set up search parameters controls."""
-        params_row = QHBoxLayout()
-        
+    def add_search_parameters_to_row(self, params_row: QHBoxLayout) -> None:
+        """Add search parameters to an existing row."""
         # Top matches count
         matches_label = QLabel("Top Matches:")
         matches_label.setObjectName("matchesLabel")
@@ -237,23 +208,6 @@ class ConfigurableSearchControls(QWidget):
         params_row.addWidget(self.top_matches_spin)
         params_row.addWidget(case_label)
         params_row.addWidget(self.case_sensitive_combo)
-        params_row.addStretch()
-        
-        return params_row
-    
-    def setup_search_button(self, parent_layout: QVBoxLayout) -> None:
-        """Set up the search button."""
-        button_layout = QHBoxLayout()
-        
-        self.search_btn = QPushButton(self.config.search_button_text)
-        self.search_btn.setObjectName("searchBtn")
-        self.search_btn.setMinimumHeight(50)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(self.search_btn)
-        button_layout.addStretch()
-        
-        parent_layout.addLayout(button_layout)
     
     def apply_styling(self) -> None:
         """Apply CSS styling to all components."""
@@ -406,71 +360,25 @@ class ConfigurableSearchControls(QWidget):
     
     def connect_signals(self) -> None:
         """Connect internal signals."""
-        if self.add_keyword_btn:
-            self.add_keyword_btn.clicked.connect(self.add_keyword)
-        if self.clear_keywords_btn:
-            self.clear_keywords_btn.clicked.connect(self.clear_keywords)
         if self.keywords_input:
-            self.keywords_input.returnPressed.connect(self.add_keyword)
+            self.keywords_input.textChanged.connect(self.on_keywords_changed)
         if self.algorithm_combo:
             self.algorithm_combo.currentTextChanged.connect(self.update_algorithm_info)
             self.algorithm_combo.currentTextChanged.connect(self.algorithm_changed.emit)
         if self.search_btn:
             self.search_btn.clicked.connect(self.request_search)
     
-    def add_keyword(self) -> None:
-        """Add keyword(s) from the input field."""
-        if not self.keywords_input:
-            return
-            
-        keywords_text = self.keywords_input.text().strip()
-        if not keywords_text:
-            return
-        
-        # Split by commas and clean up
-        new_keywords = [kw.strip() for kw in keywords_text.split(',') if kw.strip()]
-        
-        if new_keywords:
-            current_keywords = self.get_keywords()
-            # Add only unique keywords
-            for keyword in new_keywords:
-                if keyword not in current_keywords:
-                    current_keywords.append(keyword)
-                    self.keyword_added.emit(keyword)
-            
-            self.update_keywords_display(current_keywords)
-            self.keywords_input.clear()
-    
-    def clear_keywords(self) -> None:
-        """Clear all keywords."""
-        if self.keywords_display:
-            self.keywords_display.clear()
-        self.keywords_cleared.emit()
-    
-    def update_keywords_display(self, keywords: List[str]) -> None:
-        """Update the keywords display area."""
-        if not self.keywords_display:
-            return
-            
-        if keywords:
-            display_text = ", ".join(f'"{kw}"' for kw in keywords)
-            self.keywords_display.setPlainText(display_text)
-        else:
-            self.keywords_display.clear()
+    def on_keywords_changed(self) -> None:
+        """Handle keyword input changes."""
+        has_keywords = bool(self.keywords_input.text().strip())
+        if self.search_btn:
+            self.search_btn.setEnabled(has_keywords)
     
     def get_keywords(self) -> List[str]:
-        """Get the current list of keywords."""
-        if not self.keywords_display:
-            return []
-            
-        text = self.keywords_display.toPlainText()
-        if not text:
-            return []
-        
-        # Extract keywords from quotes
-        import re
-        matches = re.findall(r'"([^"]*)"', text)
-        return matches
+        """Get the current keywords string."""
+        if not self.keywords_input:
+            return ""
+        return self.keywords_input.text().strip()
     
     def update_algorithm_info(self, algorithm: str) -> None:
         """Update algorithm information display."""
@@ -496,7 +404,7 @@ class ConfigurableSearchControls(QWidget):
             QMessageBox.warning(
                 self,
                 "No Keywords",
-                "Please add at least one keyword to search for."
+                "Please enter at least one keyword to search for."
             )
             return
         
@@ -530,9 +438,10 @@ class ConfigurableSearchControls(QWidget):
             'case_sensitive': (self.case_sensitive_combo.currentText() == "Yes") if self.case_sensitive_combo else self.config.default_case_sensitive
         }
     
-    def set_keywords(self, keywords: List[str]) -> None:
+    def set_keywords(self, keywords: str) -> None:
         """Set keywords programmatically."""
-        self.update_keywords_display(keywords)
+        if self.keywords_input:
+            self.keywords_input.setText(keywords)
     
     def set_algorithm(self, algorithm: str) -> None:
         """Set the selected algorithm."""
