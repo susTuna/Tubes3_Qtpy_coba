@@ -3,16 +3,15 @@ import traceback
 import os
 import time
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QWidget, 
-                           QLabel, QSizePolicy, QFrame, QMessageBox, QProgressDialog)
+                           QLabel, QSizePolicy, QFrame, QMessageBox, QProgressDialog,
+                           QScrollArea)
 from PyQt6.QtCore import Qt
 
 from src.gui_components.header import HeaderComponent
 from src.gui_components.search import SearchControls
 from src.gui_components.result import ResultsSection
-from src.search_algorithms.search_engine import SearchEngine, AlgorithmType
-from src.database.models import SessionLocal, ApplicationDetail, ApplicantProfile
-from src.database.pdf_utils import extract_text_from_pdf
-from src.database.parser import parse_text
+from src.service.searchservice import SearchService
+from src.service.threadservice import PreprocessThread, SearchThread
 from src.config.config import CV_FOLDER
 
 class MainWindow(QMainWindow):
@@ -21,7 +20,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Applicant Tracking System")
         self.setGeometry(100, 100, 1280, 720)
         self.setup_ui()
-        
+        self.service = SearchService()
+        self.preprocess_cvs()
+
     def setup_ui(self):
         """Set up the main UI components"""
         # Create central widget and main layout
@@ -29,7 +30,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(10)
+        main_layout.setSpacing(0)
         
         # Initialize components
         self.header = HeaderComponent()
@@ -38,12 +39,15 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Ready. Enter a keyword to begin.")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
+        # Create a scroll area for results
+        self.results_scroll_area = QScrollArea()
+        self.results_scroll_area.setWidgetResizable(True)
+        self.results_scroll_area.setWidget(self.result_section)
+        
         # Add components to layout with proper spacing and separators
-        main_layout.addWidget(self.header)
-        main_layout.addWidget(self.create_separator())
         main_layout.addWidget(self.search_section)
         main_layout.addWidget(self.create_separator())
-        main_layout.addWidget(self.result_section)
+        main_layout.addWidget(self.results_scroll_area) # Use scroll area instead of result_section directly
         main_layout.addWidget(self.status_label)
         
         # Set proper size policies
@@ -51,10 +55,33 @@ class MainWindow(QMainWindow):
         self.search_section.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.search_section.setMinimumHeight(250)
         self.result_section.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.results_scroll_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.status_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         
+        # Add styling to scroll area
+        self.results_scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: 1px solid #ccc;
+                border-radius: 8px;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background-color: #f0f0f0;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #c0c0c0;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #a0a0a0;
+            }
+        """)
+        
         # Initialize search service and connect signals
-        self.search_section.search_btn.clicked.connect(self.on_search)
+        self.search_section.search_requested.connect(self.on_search)
 
     def create_separator(self):
         """Create a horizontal separator line"""
@@ -63,192 +90,86 @@ class MainWindow(QMainWindow):
         line.setFrameShadow(QFrame.Shadow.Sunken)
         return line
 
-    def on_search(self):
-        """Handle search button click"""
-        try:
-            # Get search parameters from UI components
-            keywords = self.search_section.get_keywords()
-            if not keywords:
-                self.update_status("Please enter at least one keyword.")
-                return
-                
-            keyword = keywords[0] if keywords else ""
-            algorithm = self.search_section.algorithm_combo.currentText()
-            top_matches = self.search_section.top_matches_spin.value()
-            
-            # Update UI state
-            self.update_status(f"Searching for: '{keyword}' using {algorithm}...")
-            self.search_section.search_btn.setEnabled(False)
-            
-            # Perform search directly
-            results, execution_time = self.perform_search(keyword, algorithm, top_matches)
-            
-            # Display results
-            self.display_search_results(results, execution_time)
-            
-        except Exception as e:
-            self.update_status(f"Error: {str(e)}")
-            print(f"Search error: {str(e)}")
-            traceback.print_exc()
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}")
-            self.search_section.search_btn.setEnabled(True)
-    
-    def perform_search(self, keyword, search_type, top_k):
-        """Perform search directly in the main thread"""
-        start_time = time.time()
+    def on_search(self, search_params):
+        """Handle search button click with progress dialog"""
+        keywords = search_params['keywords']
+        algorithm = search_params['algorithm']
+        top_k = search_params['top_matches']
+        case_sensitive = search_params['case_sensitive']
         
-        # Setup search engine
-        search_engine = SearchEngine()
+        # Update UI
+        self.search_section.set_search_enabled(False)
+        self.status_label.setText("Searching...")
         
-        # Get all resumes from database
-        db = SessionLocal()
-        resumes = db.query(ApplicationDetail).all()
-        applicants = db.query(ApplicantProfile).all()
-        db.close()
+        # Create progress dialog for search
+        from PyQt6.QtWidgets import QProgressDialog
+        self.search_progress = QProgressDialog("Searching CVs...", "Cancel", 0, 100, self)
+        self.search_progress.setWindowTitle(f"Searching for: {keywords}")
+        self.search_progress.setMinimumDuration(0)
+        self.search_progress.setWindowModality(Qt.WindowModality.WindowModal)
         
-        # Create progress dialog
-        progress = QProgressDialog("Searching resumes...", "Cancel", 0, len(resumes), self)
-        progress.setWindowTitle("Search Progress")
-        progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.show()
+        # Create and start search thread using the imported class
+        self.search_thread = SearchThread(
+            self.service, keywords, algorithm, top_k, case_sensitive
+        )
+        self.search_thread.progress.connect(self.search_progress.setValue)
+        self.search_thread.results_ready.connect(self.on_search_completed)
+        self.search_thread.start()
+
+    def on_search_completed(self, total, elapsed, results):
+        """Handle completion of search"""
+        self.search_section.set_search_enabled(True)
         
-        # Initialize results
-        results = {applicant.applicant_id: {"resumes": []} for applicant in applicants}
+        # Close the progress dialog
+        if hasattr(self, 'search_progress'):
+            self.search_progress.close()
         
-        # Map algorithm names to AlgorithmType
-        algorithm_map = {
-            "KMP (Knuth-Morris-Pratt)": AlgorithmType.KMP,
-            "Boyer-Moore Simple": AlgorithmType.BOYER_MOORE_SIMPLE,
-            "Boyer-Moore Complex": AlgorithmType.BOYER_MOORE_COMPLEX,
-            "Aho-Corasick": AlgorithmType.AHO_CORASICK
-        }
-        
-        # Process each resume
-        for i, resume in enumerate(resumes):
-            progress.setValue(i)
-            progress.setLabelText(f"Processing resume: {resume.cv_file_name} ({i+1}/{len(resumes)})")
-            
-            # Check for cancellation
-            if progress.wasCanceled():
-                self.update_status("Search canceled by user.")
-                return [], 0
-                
-            QApplication.processEvents()  # Keep UI responsive
-            
-            file_path = os.path.join(CV_FOLDER, resume.cv_file_name + ".pdf")
-            if not os.path.exists(file_path):
-                continue
-                
-            # Extract and parse text
-            text = parse_text(extract_text_from_pdf(file_path))
-            
-            # Perform search based on algorithm type
-            matches = []
-            
-            if "Fuzzy" in search_type:
-                matches, _ = search_engine.search_fuzzy_only(text, keyword)
-            else:
-                algorithm = algorithm_map.get(search_type, AlgorithmType.AHO_CORASICK)
-                matches, _ = search_engine.search_exact_only(text, keyword, algorithm)
-            
-            # If there are matches, add to results
-            if matches:
-                # Calculate overall score
-                score = sum(match.similarity for match in matches)
-                
-                # Get context for matches
-                match_data = []
-                for match in matches[:5]:  # Top 5 matches per resume
-                    context = self.get_context(text, match.start_pos, match.end_pos)
-                    
-                    match_data.append({
-                        "keyword": match.pattern,
-                        "start_pos": match.start_pos,
-                        "end_pos": match.end_pos,
-                        "similarity": match.similarity,
-                        "context": context
-                    })
-                
-                # Add to results
-                results[resume.applicant_id]["resumes"].append({
-                    "resume_id": resume.cv_file_name,
-                    "score": score,
-                    "file_path": file_path,
-                    "matches": match_data
-                })
-        
-        # Close progress dialog
-        progress.setValue(len(resumes))
-        
-        # Sort results by total score
-        sorted_results = sorted(
-            results.items(),
-            key=lambda item: sum(resume.get("score", 0) for resume in item[1]["resumes"]),
-            reverse=True
+        # Display results
+        self.result_section.display_results(
+            results, elapsed, 
+            {'keywords': self.search_section.get_keywords()}
         )
         
-        # Calculate execution time
-        end_time = time.time()
-        execution_time = end_time - start_time
-        
-        # Return only top-k results
-        return sorted_results[:top_k], execution_time
-    
-    def get_context(self, text, start_pos, end_pos, context_chars=50):
-        """Extract context around a match"""
-        text_len = len(text)
-        context_start = max(0, start_pos - context_chars)
-        context_end = min(text_len, end_pos + context_chars)
-        
-        # Add ellipsis if needed
-        prefix = "..." if context_start > 0 else ""
-        suffix = "..." if context_end < text_len else ""
-        
-        return prefix + text[context_start:context_end] + suffix
-    
-    def display_search_results(self, results, execution_time):
-        """Display search results"""
-        try:
-            # Convert results to correct format expected by ResultsSection
-            formatted_results = []
-            
-            # results is a list of tuples: [(applicant_id, applicant_data), ...]
-            for applicant_id, applicant_data in results:
-                # Each applicant has a "resumes" list with match data
-                for resume in applicant_data.get("resumes", []):
-                    # Each resume has a "matches" list
-                    for match in resume.get("matches", []):
-                        formatted_results.append({
-                            'pattern': match.get("keyword", ""),
-                            'start_pos': match.get("start_pos", 0),
-                            'end_pos': match.get("end_pos", 0),
-                            'snippet': match.get("context", ""),
-                            'similarity': match.get("similarity", 1.0),
-                            'resume_id': resume.get("resume_id", ""),
-                            'applicant_id': applicant_id
-                        })
-            
-            # Update UI components with results
-            self.result_section.display_results(
-                formatted_results, 
-                execution_time,
-                {'algorithm': self.search_section.algorithm_combo.currentText()}
+        # Update status
+        if results:
+            self.status_label.setText(
+                f"Found {len(results)} matches among {total} CVs in {elapsed:.2f} seconds."
             )
-            self.search_section.search_btn.setEnabled(True)
-            
-            # Show result count
-            match_count = sum(len(data["resumes"]) for _, data in results)
-            self.update_status(f"Search complete in {execution_time:.2f} seconds. Found {match_count} matches.")
-            
-        except Exception as e:
-            self.update_status(f"Error displaying results: {str(e)}")
-            print(f"Result display error: {str(e)}")
-            traceback.print_exc()
-            self.search_section.search_btn.setEnabled(True)
+        else:
+            self.status_label.setText(
+                f"No matches found among {total} CVs in {elapsed:.2f} seconds."
+            )
 
     def update_status(self, message):
         """Update status message"""
         self.status_label.setText(message)
+
+    def preprocess_cvs(self):
+        """Preprocess CVs in background thread with progress dialog"""
+        # First, get count of files to process
+        import os
+        cv_files = [f for f in os.listdir(CV_FOLDER) if f.endswith('.pdf')]
+        total_files = len(cv_files)
+        
+        # Create progress dialog
+        from PyQt6.QtWidgets import QProgressDialog
+        self.preprocess_progress = QProgressDialog("Preprocessing CVs...", "Cancel", 0, total_files, self)
+        self.preprocess_progress.setWindowTitle("CV Preprocessing")
+        self.preprocess_progress.setMinimumDuration(0)  # Show immediately
+        self.preprocess_progress.setWindowModality(Qt.WindowModality.WindowModal)
+        
+        # Create and start thread using the imported class
+        self.preprocess_thread = PreprocessThread(self.service)
+        self.preprocess_thread.progress.connect(self.preprocess_progress.setValue)
+        self.preprocess_thread.finished.connect(self.on_preprocessing_finished)
+        self.preprocess_thread.start()
+        
+    def on_preprocessing_finished(self, count, elapsed):
+        # Close the progress dialog
+        if hasattr(self, 'preprocess_progress'):
+            self.preprocess_progress.close()
+        
+        self.status_label.setText(f"Ready. {count} CVs preprocessed in {elapsed:.2f} seconds.")
 
 if __name__ == "__main__":
     try:
