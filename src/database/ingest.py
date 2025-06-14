@@ -80,9 +80,9 @@ def seed_from_csv():
                     profile = ApplicantProfile(
                         first_name = fake.first_name(),
                         last_name  = fake.last_name(),
-                        birthdate  = generate_random_date(),
+                        date_of_birth = generate_random_date(),
                         address    = fake.address().replace('\n', ', '),
-                        phone      = fake.numerify(text="+62-8##-####-####")
+                        phone_number = fake.numerify(text="+62-8##-####-####")
                     )
                     
                     db.add(profile)
@@ -105,8 +105,8 @@ def seed_from_csv():
                 try:
                     r = ApplicationDetail(
                         applicant_id = applicant_map[random.randint(0, len(applicant_map) - 1)],
-                        applicant_role = row["Category"],
-                        cv_file_name = row["ID"]
+                        application_role = row["Category"],
+                        cv_path = row["ID"]
                     )
                     db.add(r)
                     application_count += 1

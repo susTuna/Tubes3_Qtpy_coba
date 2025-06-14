@@ -35,9 +35,9 @@ CREATE TABLE `ApplicantProfile` (
   `applicant_id` int(11) NOT NULL AUTO_INCREMENT,
   `first_name` varchar(50) DEFAULT NULL,
   `last_name` varchar(50) DEFAULT NULL,
-  `birthdate` date DEFAULT NULL,
+  `date_of_birth` date DEFAULT NULL,
   `address` varchar(255) DEFAULT NULL,
-  `phone` varchar(20) DEFAULT NULL,
+  `phone_number` varchar(20) DEFAULT NULL,
   PRIMARY KEY (`applicant_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -113,8 +113,8 @@ DROP TABLE IF EXISTS `ApplicationDetail`;
 CREATE TABLE `ApplicationDetail` (
   `detail_id` int(11) NOT NULL AUTO_INCREMENT,
   `applicant_id` int(11) NOT NULL,
-  `applicant_role` varchar(100) DEFAULT NULL,
-  `cv_file_name` text DEFAULT NULL,
+  `application_role` varchar(100) DEFAULT NULL,
+  `cv_path` text DEFAULT NULL,
   PRIMARY KEY (`detail_id`),
   KEY `applicant_id` (`applicant_id`),
   CONSTRAINT `ApplicationDetail_ibfk_1` FOREIGN KEY (`applicant_id`) REFERENCES `ApplicantProfile` (`applicant_id`)

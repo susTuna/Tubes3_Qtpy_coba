@@ -15,9 +15,9 @@ class ApplicantProfile(Base):
     applicant_id     = Column(Integer, primary_key=True, autoincrement=True)
     first_name       = Column(String(50))
     last_name        = Column(String(50))
-    birthdate        = Column(Date)
+    date_of_birth    = Column(Date)
     address          = Column(String(255))
-    phone            = Column(String(20))
+    phone_number     = Column(String(20))
 
     applications = relationship(
         "ApplicationDetail",
@@ -29,8 +29,8 @@ class ApplicationDetail(Base):
     __tablename__ = "ApplicationDetail"
     detail_id        = Column(Integer, primary_key=True, autoincrement=True)
     applicant_id     = Column(Integer, ForeignKey('ApplicantProfile.applicant_id'), nullable=False)
-    applicant_role   = Column(String(100))
-    cv_file_name     = Column(Text)
+    application_role = Column(String(100))
+    cv_path          = Column(Text)
 
     applicant = relationship("ApplicantProfile", back_populates="applications")
 
