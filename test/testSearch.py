@@ -27,7 +27,7 @@ def main():
         top_k = 5
 
     # Run search
-    total, elapsed, matches = service.search(keywords, algorithm, top_k)
+    total, elapsed, matches = service.search(keywords, algorithm, top_k, False)
     print(f"\nScanned {total} CVs in {elapsed:.2f} seconds.\n")
 
     if not matches:
