@@ -1,22 +1,27 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,  # type: ignore
                             QScrollArea, QFrame, QPushButton, QTextEdit,
-                            QProgressBar, QSplitter, QMessageBox, QFileDialog, QGridLayout)
+                            QProgressBar, QSplitter, QMessageBox, QFileDialog, QGridLayout, QDialog, QFormLayout, QGroupBox, QDialogButtonBox)  # type: ignore
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve # type: ignore
-from PyQt6.QtGui import QFont, QPalette # type: ignore
+from PyQt6.QtGui import QFont, QPalette, QTextCharFormat, QColor # type: ignore
 from typing import Optional, List, Dict, Any
+from ..service.searchservice import CVMatch
+from ..database.models import SessionLocal, ApplicantProfile
 from .general_config import gui_config, ResultConfig
 import time
+import subprocess
+import platform
+import os
 
 
 class ConfigurableResultCard(QFrame):
     """Highly configurable individual result card widget."""
     
-    # Signals
-    card_clicked = pyqtSignal(dict)  # Emitted when card is clicked
-    card_double_clicked = pyqtSignal(dict)  # Emitted when card is double-clicked
+    # Signals - remove card_clicked & card_double_clicked signals
+    # Keep only the signal needed for the "View PDF" functionality
+    view_pdf_requested = pyqtSignal(str)  # Emit the PDF path when view button clicked
     
     def __init__(self, 
-                 match_data: Dict[str, Any], 
+                 match_data: CVMatch, 
                  config: Optional[ResultConfig] = None,
                  parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -27,7 +32,16 @@ class ConfigurableResultCard(QFrame):
         
         # Data
         self.match_data = match_data
-        self.is_selected = False
+        self.db = SessionLocal()
+        self.profile = self.db.query(ApplicantProfile).get(self.match_data.applicant_id)
+        self.db.close()
+        self.name = self.profile.first_name + " " + self.profile.last_name if self.profile else "Unknown Applicant"
+        self.cv_path = self.match_data.cv_path
+        self.score = self.match_data.score
+        self.occurrences = self.match_data.occurrences
+        
+        # Remove is_selected property, as cards won't be selectable
+        # self.is_selected = False
         
         # Animation
         self.animation: Optional[QPropertyAnimation] = None
@@ -38,7 +52,8 @@ class ConfigurableResultCard(QFrame):
     def setup_ui(self) -> None:
         """Set up the result card UI."""
         self.setFrameStyle(QFrame.Shape.Box)
-        self.setCursor(Qt.CursorShape.PointingHandCursor if self.config.enable_card_selection else Qt.CursorShape.ArrowCursor)
+        # Use default cursor instead of pointing hand
+        self.setCursor(Qt.CursorShape.ArrowCursor)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
@@ -50,7 +65,7 @@ class ConfigurableResultCard(QFrame):
         layout.setSpacing(self.gui_config.spacing.margin_small)
         
         # Applicant name header (from the image reference)
-        applicant_name = self.match_data.get('applicant_name', 'Applicant')
+        applicant_name = self.name
         name_label = QLabel(applicant_name)
         name_label.setObjectName("applicantNameLabel")
         
@@ -58,7 +73,13 @@ class ConfigurableResultCard(QFrame):
         name_font.setBold(True)
         name_font.setPointSize(self.gui_config.fonts.size_large)
         name_label.setFont(name_font)
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        # Matches
+        matches_label = QLabel(f"Matches: {self.score}")
+        matches_label.setObjectName("matchesLabel")
+        matches_label.setFont(QFont(self.gui_config.fonts.family_primary, weight=QFont.Weight.Bold))
+        matches_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         # Matched keywords section
         keywords_label = QLabel("Matched keywords:")
@@ -68,18 +89,11 @@ class ConfigurableResultCard(QFrame):
         # Create the matched keywords list
         keywords_layout = QVBoxLayout()
         keywords_layout.setSpacing(5)
-        
-        # Get the keyword occurrences (assuming they're provided in match_data)
-        keyword_occurrences = self.match_data.get('keyword_occurrences', {})
-        if not keyword_occurrences and 'pattern' in self.match_data:
-            # Fallback: use the pattern field if keyword_occurrences not provided
-            pattern = self.match_data.get('pattern', '')
-            keyword_occurrences = {pattern: 1}
             
         # Add each keyword with its occurrence count
-        for keyword, count in keyword_occurrences.items():
-            occurrence_text = f"{count} occurrence{'s' if count > 1 else ''}"
-            keyword_item = QLabel(f"• {keyword}: {occurrence_text}")
+        for key in self.occurrences:
+            occurrence_text = f"{self.occurrences.get(key)} occurrence{'s' if self.occurrences.get(key) > 1 else ''}"
+            keyword_item = QLabel(f"• {key}: {occurrence_text}")
             keyword_item.setObjectName("keywordItem")
             keywords_layout.addWidget(keyword_item)
             
@@ -87,7 +101,7 @@ class ConfigurableResultCard(QFrame):
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(10)
         
-        details_btn = QPushButton("Details")
+        details_btn = QPushButton("CV Summary")
         details_btn.setObjectName("detailsBtn")
         
         view_cv_btn = QPushButton("View CV")
@@ -104,13 +118,90 @@ class ConfigurableResultCard(QFrame):
         layout.addLayout(buttons_layout)
         
         # Connect button signals
-        details_btn.clicked.connect(lambda: self.card_clicked.emit(self.match_data))
-        view_cv_btn.clicked.connect(lambda: self.card_double_clicked.emit(self.match_data))
+        details_btn.clicked.connect(self.show_details)
+        view_cv_btn.clicked.connect(self.open_pdf)
+    
+    def show_details(self) -> None:
+        """Show details for this CV using CV Summary Window"""
+        from .cv_summary_window import CVSummaryWindow
+    
+        # Get additional profile data from database if needed
+        db = SessionLocal()
+        profile = db.query(ApplicantProfile).get(self.match_data.applicant_id)
+    
+        # Extract profile data with fallbacks
+        name = self.name
+        birthdate = getattr(profile, 'birthdate', "Not available") if profile else "Not available"
+        address = getattr(profile, 'address', "Not available") if profile else "Not available"
+        phone = getattr(profile, 'phone', "Not available") if profile else "Not available"
+    
+        # Placeholder data - in a real app, you'd extract these from the CV or database
+        # You could add functions to parse CV text from self.match_data.cv_path
+        skills = list(self.occurrences.keys())  # Use matched keywords as skills for demo
+    
+        # Example job history (replace with actual data in production)
+        jobs = [
+            {
+                "title": "Software Engineer",
+                "period": "2020-Present",
+                "description": f"CV matched {self.score} keyword occurrences"
+            }
+        ]
+    
+        # Example education (replace with actual data in production)
+        education = [
+            {
+                "degree": "Computer Science",
+                "institution": "University",
+                "period": "2016-2020"
+            }
+        ]
+    
+        # Create and show the summary window
+        self.summary_window = CVSummaryWindow(
+            name=name,
+            birthdate=birthdate,
+            address=address,
+            phone=phone,
+            skills=skills,
+            jobs=jobs,
+            education=education
+        )
+    
+        # Show the window as non-modal
+        self.summary_window.show()
+    
+        # Close the database connection
+        db.close()
+    
+    def open_pdf(self) -> None:
+        """Open the CV PDF file with the system's default PDF viewer"""
+        if not self.cv_path or not os.path.exists(self.cv_path):
+            QMessageBox.warning(
+                self, 
+                "File Not Found", 
+                f"The PDF file could not be found at:\n{self.cv_path}"
+            )
+            return
+            
+        try:
+            # Use the appropriate command based on the operating system
+            if platform.system() == 'Windows':
+                os.startfile(self.cv_path)
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', self.cv_path])
+            else:  # Linux and other Unix-like systems
+                subprocess.run(['xdg-open', self.cv_path])
+        except Exception as e:
+            QMessageBox.critical(
+                self, 
+                "Error Opening PDF", 
+                f"Could not open the PDF file:\n{str(e)}"
+            )
     
     def _highlight_pattern_in_snippet(self, text_edit: QTextEdit, pattern: str) -> None:
         """Highlight the pattern in the snippet text."""
         try:
-            from PyQt6.QtGui import QTextCharFormat, QColor # type: ignore
             
             cursor = text_edit.textCursor()
             format = QTextCharFormat()
@@ -145,13 +236,13 @@ class ConfigurableResultCard(QFrame):
         }}
         """
         
-        if self.config.card_hover_effect:
-            base_style += f"""
-            QFrame:hover {{
-                border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.secondary};
-                background-color: {self.gui_config.colors.bg_secondary};
-            }}
-            """
+        # if self.config.card_hover_effect:
+        #     base_style += f"""
+        #     QFrame:hover {{
+        #         border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.secondary};
+        #         background-color: {self.gui_config.colors.bg_secondary};
+        #     }}
+        #     """
     
         # Label styles
         label_styles = f"""
@@ -201,31 +292,31 @@ class ConfigurableResultCard(QFrame):
         
         self.setStyleSheet(full_style)
     
-    def mousePressEvent(self, event) -> None:
-        """Handle mouse press events."""
-        if event.button() == Qt.MouseButton.LeftButton and self.config.enable_card_selection:
-            self.set_selected(not self.is_selected)
-            self.card_clicked.emit(self.match_data)
-        super().mousePressEvent(event)
+    # def mousePressEvent(self, event) -> None:
+    #     """Handle mouse press events."""
+    #     if event.button() == Qt.MouseButton.LeftButton and self.config.enable_card_selection:
+    #         self.set_selected(not self.is_selected)
+    #         self.card_clicked.emit(self.match_data)
+    #     super().mousePressEvent(event)
     
-    def mouseDoubleClickEvent(self, event) -> None:
-        """Handle mouse double-click events."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.card_double_clicked.emit(self.match_data)
-        super().mouseDoubleClickEvent(event)
+    # def mouseDoubleClickEvent(self, event) -> None:
+    #     """Handle mouse double-click events."""
+    #     if event.button() == Qt.MouseButton.LeftButton:
+    #         self.card_double_clicked.emit(self.match_data)
+    #     super().mouseDoubleClickEvent(event)
     
-    def set_selected(self, selected: bool) -> None:
-        """Set the selection state of the card."""
-        self.is_selected = selected
-        if selected:
-            self.setStyleSheet(self.styleSheet() + f"""
-            QFrame {{
-                border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.primary} !important;
-                background-color: {self.gui_config.colors.bg_secondary} !important;
-            }}
-            """)
-        else:
-            self.apply_styling()  # Reset to normal styling
+    # def set_selected(self, selected: bool) -> None:
+    #     """Set the selection state of the card."""
+    #     self.is_selected = selected
+    #     if selected:
+    #         self.setStyleSheet(self.styleSheet() + f"""
+    #         QFrame {{
+    #             border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.primary} !important;
+    #             background-color: {self.gui_config.colors.bg_secondary} !important;
+    #         }}
+    #         """)
+    #     else:
+    #         self.apply_styling()  # Reset to normal styling
     
     def animate_entry(self) -> None:
         """Animate card entry if animations are enabled."""
@@ -233,7 +324,6 @@ class ConfigurableResultCard(QFrame):
             return
             
         try:
-            from PyQt6.QtCore import QPropertyAnimation, QEasingCurve # type: ignore
             
             self.animation = QPropertyAnimation(self, b"geometry")
             self.animation.setDuration(300)
@@ -261,9 +351,7 @@ class ConfigurableResultCard(QFrame):
 class ConfigurableResultsSection(QWidget):
     """Highly configurable results section displaying search results and statistics."""
     
-    # Signals
-    result_selected = pyqtSignal(dict)  # Emitted when a result is selected
-    result_double_clicked = pyqtSignal(dict)  # Emitted when a result is double-clicked
+    # Remove the selection-related signals
     export_requested = pyqtSignal(str)  # Emitted when export is requested with format
     results_cleared = pyqtSignal()  # Emitted when results are cleared
     
@@ -277,9 +365,11 @@ class ConfigurableResultsSection(QWidget):
         self.gui_config = gui_config
         
         # Data
-        self.current_results: List[Dict[str, Any]] = []
+        self.current_results: List[CVMatch] = []
         self.search_time: float = 0.0
-        self.selected_cards: List[ConfigurableResultCard] = []
+        
+        # Remove selected cards tracking
+        # self.selected_cards: List[ConfigurableResultCard] = []
         
         # UI Elements
         self.results_title: Optional[QLabel] = None
@@ -545,7 +635,7 @@ class ConfigurableResultsSection(QWidget):
         """Show search progress indication."""
         if self.progress_bar:
             self.progress_bar.setVisible(True)
-            self.progress_bar.setRange(0, 0)  # Indeterminate progress
+            self.progress_bar.setRange(0, 0) # Indeterminate progress
         
         if self.results_count_label:
             self.results_count_label.setText(message)
@@ -557,7 +647,7 @@ class ConfigurableResultsSection(QWidget):
         if self.progress_bar:
             self.progress_bar.setVisible(False)
     
-    def display_results(self, results: List[Dict[str, Any]], search_time: float, search_params: Dict[str, Any]) -> None:
+    def display_results(self, results: List[CVMatch], search_time: float, search_params: Dict[str, Any]) -> None:
         """Display search results."""
         if self.progress_bar:
             self.progress_bar.setVisible(False)
@@ -569,7 +659,7 @@ class ConfigurableResultsSection(QWidget):
         
         # Update statistics
         if self.results_count_label:
-            self.results_count_label.setText(f"Found: {len(results)} matches")
+            self.results_count_label.setText(f"Found: {len(results)} CV matches")
         
         if self.search_time_label:
             self.search_time_label.setText(f"⏱️ Time: {search_time:.3f}s")
@@ -581,27 +671,6 @@ class ConfigurableResultsSection(QWidget):
                 self.scroll_layout.addWidget(self.empty_state_label)
             return
         
-        # Group results by applicant
-        applicants = {}
-        for result in results:
-            applicant_id = result.get('applicant_id')
-            if not applicant_id:
-                continue
-                
-            if applicant_id not in applicants:
-                applicants[applicant_id] = {
-                    'applicant_name': result.get('applicant_name', f'Applicant {applicant_id}'),
-                    'keyword_occurrences': {}
-                }
-            
-            # Count keyword occurrences
-            pattern = result.get('pattern', '')
-            if pattern:
-                if pattern in applicants[applicant_id]['keyword_occurrences']:
-                    applicants[applicant_id]['keyword_occurrences'][pattern] += 1
-                else:
-                    applicants[applicant_id]['keyword_occurrences'][pattern] = 1
-        
         # Create a grid layout for applicant cards (3 columns)
         grid_widget = QWidget()
         grid_layout = QGridLayout(grid_widget)
@@ -611,17 +680,10 @@ class ConfigurableResultsSection(QWidget):
         row, col = 0, 0
         max_cols = 3  # 3 columns as shown in the image
         
-        for applicant_id, applicant_data in applicants.items():
-            match_data = {
-                'applicant_id': applicant_id,
-                'applicant_name': applicant_data['applicant_name'],
-                'keyword_occurrences': applicant_data['keyword_occurrences']
-            }
-            
-            card = ConfigurableResultCard(match_data, self.config)
-            card.card_clicked.connect(self._on_card_clicked)
-            card.card_double_clicked.connect(lambda data: self.result_double_clicked.emit(data))
-            
+        for result in self.current_results:
+            card = ConfigurableResultCard(result, self.config)
+            # Remove card click connections
+            # Just add animation if enabled
             if self.config.enable_animations:
                 card.animate_entry()
             
@@ -639,20 +701,6 @@ class ConfigurableResultsSection(QWidget):
         # Auto-scroll to results if enabled
         if self.config.auto_scroll_to_results and self.scroll_area:
             self.scroll_area.verticalScrollBar().setValue(0)
-    
-    def _on_card_clicked(self, result_data: Dict[str, Any]) -> None:
-        """Handle card click events."""
-        # Find the card that was clicked
-        sender = self.sender()
-        if isinstance(sender, ConfigurableResultCard):
-            if sender.is_selected:
-                if sender not in self.selected_cards:
-                    self.selected_cards.append(sender)
-            else:
-                if sender in self.selected_cards:
-                    self.selected_cards.remove(sender)
-        
-        self.result_selected.emit(result_data)
     
     def clear_results_display(self) -> None:
         """Clear the results display area."""
@@ -672,7 +720,6 @@ class ConfigurableResultsSection(QWidget):
         """Clear all results and reset the display."""
         self.current_results.clear()
         self.search_time = 0.0
-        self.selected_cards.clear()
         
         # Reset UI
         if self.results_count_label:
@@ -781,25 +828,6 @@ class ConfigurableResultsSection(QWidget):
     def get_search_time(self) -> float:
         """Get the last search time."""
         return self.search_time
-    
-    def get_selected_results(self) -> List[Dict[str, Any]]:
-        """Get the currently selected results."""
-        return [card.get_match_data() for card in self.selected_cards]
-    
-    def select_all_results(self) -> None:
-        """Select all result cards."""
-        for i in range(self.scroll_layout.count()):
-            widget = self.scroll_layout.itemAt(i).widget()
-            if isinstance(widget, ConfigurableResultCard):
-                widget.set_selected(True)
-                if widget not in self.selected_cards:
-                    self.selected_cards.append(widget)
-    
-    def deselect_all_results(self) -> None:
-        """Deselect all result cards."""
-        for card in self.selected_cards:
-            card.set_selected(False)
-        self.selected_cards.clear()
     
     def update_config(self, config: ResultConfig) -> None:
         """Update result configuration and refresh UI."""
