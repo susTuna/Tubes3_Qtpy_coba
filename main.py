@@ -207,7 +207,9 @@ class MainWindow(QMainWindow):
                 border: 1px solid #cccccc;
                 border-radius: 5px;
                 text-align: center;
+                color: #333333;
                 background-color: #f5f5f5;
+                                           
             }
             QProgressBar::chunk {
                 background-color: #4c72b0;

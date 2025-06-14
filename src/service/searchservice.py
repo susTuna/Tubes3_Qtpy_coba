@@ -43,6 +43,8 @@ class SearchService:
         start = time.time()
         total = len(resumes)
         processed = 0
+
+        if progress_callback and total > 0: progress_callback(0) 
         
         # Create cache directory
         cache_dir = os.path.join(os.path.dirname(CV_FOLDER), "cache")
@@ -99,7 +101,11 @@ class SearchService:
                     
                 processed += 1
                 if progress_callback:
-                    progress_callback(processed)
+                    progress = min(100, int((processed / total) * 100))
+                    progress_callback(progress)
+                    
+        if progress_callback:
+            progress_callback(100)
 
         elapsed = time.time() - start
         return elapsed, len(self.text_cache_pattern)
@@ -190,6 +196,9 @@ class SearchService:
                     progress_callback(progress)
 
         # Sort CVs directly by score
+        if progress_callback:
+            progress_callback(100)
+
         all_matches.sort(key=lambda m: m.score, reverse=True)
         elapsed = time.time() - start_time
 
