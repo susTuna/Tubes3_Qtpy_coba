@@ -44,12 +44,12 @@ class ConfigurableSearchControls(QWidget):
         """Set up the search controls UI components."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            self.gui_config.spacing.margin_large,
             self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_large,
-            self.gui_config.spacing.margin_medium
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_medium,
+            self.gui_config.spacing.margin_small
         )
-        layout.setSpacing(self.gui_config.spacing.margin_large)
+        layout.setSpacing(self.gui_config.spacing.margin_small)
         
         # Keywords section
         if self.config.show_keywords_section:
@@ -67,12 +67,12 @@ class ConfigurableSearchControls(QWidget):
         keywords_frame.setFrameStyle(QFrame.Shape.Box)
         
         keywords_layout = QVBoxLayout(keywords_frame)
-        keywords_layout.setSpacing(self.gui_config.spacing.margin_medium)
+        keywords_layout.setSpacing(self.gui_config.spacing.margin_small)
         keywords_layout.setContentsMargins(
-            self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_medium
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_small
         )
         
         # Keywords header
@@ -108,12 +108,12 @@ class ConfigurableSearchControls(QWidget):
         algorithm_frame.setFrameStyle(QFrame.Shape.Box)
         
         algorithm_layout = QVBoxLayout(algorithm_frame)
-        algorithm_layout.setSpacing(self.gui_config.spacing.margin_large)
+        algorithm_layout.setSpacing(self.gui_config.spacing.margin_medium)
         algorithm_layout.setContentsMargins(
-            self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_medium
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_small
         )
         
         # Algorithm header
@@ -163,19 +163,8 @@ class ConfigurableSearchControls(QWidget):
         if self.config.show_algorithm_info:
             algorithm_layout.addWidget(self.algorithm_info)
         
-        # Add search button to algorithm frame
-        button_layout = QHBoxLayout()
-        self.search_btn = QPushButton(self.config.search_button_text)
-        self.search_btn.setObjectName("searchBtn")
-        self.search_btn.setMinimumHeight(50)
-        
-        button_layout.addStretch()
-        button_layout.addWidget(self.search_btn)
-        button_layout.addStretch()
-        
         # Add some spacing between the algorithm info and search button
-        algorithm_layout.addSpacing(self.gui_config.spacing.margin_medium)
-        algorithm_layout.addLayout(button_layout)
+        algorithm_layout.addSpacing(self.gui_config.spacing.margin_small)
         
         parent_layout.addWidget(algorithm_frame)
     
@@ -203,11 +192,24 @@ class ConfigurableSearchControls(QWidget):
         
         if self.config.default_case_sensitive:
             self.case_sensitive_combo.setCurrentText("Yes")
+
+        # Add search button to algorithm frame
+        button_layout = QHBoxLayout()
+        self.search_btn = QPushButton(self.config.search_button_text)
+        self.search_btn.setObjectName("searchBtn")
+        self.search_btn.setMaximumHeight(50)
+        
+        button_layout.addStretch()
+        button_layout.addWidget(self.search_btn)
+        button_layout.addStretch()
         
         params_row.addWidget(matches_label)
         params_row.addWidget(self.top_matches_spin)
         params_row.addWidget(case_label)
         params_row.addWidget(self.case_sensitive_combo)
+        params_row.addStretch(1)
+        params_row.addLayout(button_layout)
+        
     
     def apply_styling(self) -> None:
         """Apply CSS styling to all components."""
@@ -234,6 +236,8 @@ class ConfigurableSearchControls(QWidget):
         QLineEdit#keywordsInput {{
             border: {self.gui_config.spacing.border_width_thin}px solid {self.gui_config.colors.border_medium};
             border-radius: {self.gui_config.spacing.border_radius_medium}px;
+            background-color: {self.gui_config.colors.bg_primary};
+            color: {self.gui_config.colors.text_primary};
             padding: {self.gui_config.spacing.padding_medium}px;
             font-size: {self.gui_config.fonts.size_normal}pt;
         }}
@@ -273,7 +277,7 @@ class ConfigurableSearchControls(QWidget):
             color: {self.gui_config.colors.text_light};
             border: none;
             border-radius: {self.gui_config.spacing.border_radius_large}px;
-            font-size: {self.gui_config.fonts.size_xlarge}pt;
+            font-size: {self.gui_config.fonts.size_medium}pt;
             font-weight: bold;
             padding: {self.gui_config.spacing.padding_medium}px {self.gui_config.spacing.padding_large}px;
         }}
@@ -291,48 +295,32 @@ class ConfigurableSearchControls(QWidget):
         
         # ComboBox and SpinBox styles
         control_style = f"""
-        QComboBox#algorithmCombo, QComboBox#caseSensitiveCombo {{
+        QComboBox#algorithmCombo, QComboBox#caseSensitiveCombo, QSpinBox#topMatchesSpin  {{
             border: {self.gui_config.spacing.border_width_thin}px solid {self.gui_config.colors.border_medium};
             border-radius: {self.gui_config.spacing.border_radius_medium}px;
             padding: {self.gui_config.spacing.padding_medium}px;
             font-size: {self.gui_config.fonts.size_normal}pt;
+            max-height: 12px;
+            background-color: {self.gui_config.colors.bg_primary};
+            color: {self.gui_config.colors.text_primary};
             min-width: 120px;
         }}
-        QComboBox#algorithmCombo:focus, QComboBox#caseSensitiveCombo:focus {{
+
+        QComboBox#algorithmCombo QAbstractItemView, QComboBox#caseSensitiveCombo QAbstractItemView {{
+            background-color: {self.gui_config.colors.bg_primary};
+            selection-background-color: {self.gui_config.colors.bg_primary};
+            selection-color: {self.gui_config.colors.text_primary};
+        }}
+
+        QComboBox#algorithmCombo:focus, QComboBox#caseSensitiveCombo:focus, QSpinBox#topMatchesSpin:focus  {{
             border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.secondary};
         }}
         
-        QSpinBox#topMatchesSpin {{
-            border: {self.gui_config.spacing.border_width_thin}px solid {self.gui_config.colors.border_medium};
-            border-radius: {self.gui_config.spacing.border_radius_medium}px;
-            padding: {self.gui_config.spacing.padding_medium}px;
-            font-size: {self.gui_config.fonts.size_normal}pt;
-            min-width: 120px;
-        }}
-        QSpinBox#topMatchesSpin:focus {{
-            border: {self.gui_config.spacing.border_width_medium}px solid {self.gui_config.colors.secondary};
-        }}
         """
         
         # Text display styles
         display_style = f"""
-        QTextEdit#keywordsDisplay {{
-            border: none;
-            background-color: transparent;
-            color: {self.gui_config.colors.text_primary};
-            font-family: {self.gui_config.fonts.family_monospace};
-        }}
         
-        QScrollArea#keywordsScrollArea {{
-            border: {self.gui_config.spacing.border_width_thin}px solid {self.gui_config.colors.border_medium};
-            border-radius: {self.gui_config.spacing.border_radius_medium}px;
-            background-color: {self.gui_config.colors.bg_secondary};
-        }}
-        
-        QLabel#keywordsDisplayLabel, QLabel#algorithmSelectLabel, QLabel#matchesLabel, QLabel#caseLabel {{
-            color: {self.gui_config.colors.text_secondary};
-            font-weight: bold;
-        }}
         
         QLabel#algorithmInfo {{
             color: {self.gui_config.colors.text_secondary};

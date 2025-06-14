@@ -11,6 +11,7 @@ import time
 import subprocess
 import platform
 import os
+from ..service.service_provider import get_search_service
 
 
 class ConfigurableResultCard(QFrame):
@@ -50,56 +51,68 @@ class ConfigurableResultCard(QFrame):
         self.apply_styling()
     
     def setup_ui(self) -> None:
-        """Set up the result card UI."""
+        """Set up the result card UI with better horizontal space usage."""
         self.setFrameStyle(QFrame.Shape.Box)
-        # Use default cursor instead of pointing hand
         self.setCursor(Qt.CursorShape.ArrowCursor)
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            self.gui_config.spacing.padding_medium,
-            self.gui_config.spacing.padding_medium,
-            self.gui_config.spacing.padding_medium,
-            self.gui_config.spacing.padding_medium
+            self.gui_config.spacing.margin_medium,
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_medium,
+            self.gui_config.spacing.margin_small
         )
         layout.setSpacing(self.gui_config.spacing.margin_small)
         
-        # Applicant name header (from the image reference)
-        applicant_name = self.name
-        name_label = QLabel(applicant_name)
-        name_label.setObjectName("applicantNameLabel")
+        # Header section with name and match count
+        header_layout = QHBoxLayout()
         
+        # Applicant name header
+        name_label = QLabel(self.name)
+        name_label.setObjectName("applicantNameLabel")
         name_font = QFont(self.gui_config.fonts.family_primary)
         name_font.setBold(True)
-        name_font.setPointSize(self.gui_config.fonts.size_large)
+        name_font.setPointSize(self.gui_config.fonts.size_medium)  # Slightly smaller
         name_label.setFont(name_font)
-        name_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        # Matches
+        
+        # Matches count
         matches_label = QLabel(f"Matches: {self.score}")
         matches_label.setObjectName("matchesLabel")
-        matches_label.setFont(QFont(self.gui_config.fonts.family_primary, weight=QFont.Weight.Bold))
-        matches_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        matches_font = QFont(self.gui_config.fonts.family_primary)
+        matches_font.setPointSize(self.gui_config.fonts.size_small)
+        matches_label.setFont(matches_font)
         
-        # Matched keywords section
+        header_layout.addWidget(name_label)
+        header_layout.addStretch(1)
+        header_layout.addWidget(matches_label)
+        
+        # Matched keywords section with better styling
         keywords_label = QLabel("Matched keywords:")
         keywords_label.setObjectName("matchedKeywordsLabel")
         keywords_label.setFont(QFont(self.gui_config.fonts.family_primary, weight=QFont.Weight.Bold))
         
-        # Create the matched keywords list
-        keywords_layout = QVBoxLayout()
-        keywords_layout.setSpacing(5)
-            
-        # Add each keyword with its occurrence count
+        # Create keyword chips in a flow layout
+        keywords_widget = QWidget()
+        keywords_layout = QVBoxLayout(keywords_widget)
+        keywords_layout.setContentsMargins(0, 0, 0, 0)
+        keywords_layout.setSpacing(4)
+        
+        # Add each keyword with its occurrence count as a styled label
         for key in self.occurrences:
             occurrence_text = f"{self.occurrences.get(key)} occurrence{'s' if self.occurrences.get(key) > 1 else ''}"
             keyword_item = QLabel(f"• {key}: {occurrence_text}")
             keyword_item.setObjectName("keywordItem")
+            keyword_item.setStyleSheet(f"""
+                padding: 2px 5px;
+                color: {self.gui_config.colors.text_primary};
+                background-color: {self.gui_config.colors.bg_secondary};
+                border-radius: 3px;
+            """)
             keywords_layout.addWidget(keyword_item)
-            
-        # Add buttons for actions (from image reference)
+        
+        # Buttons section
         buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(10)
+        buttons_layout.setSpacing(8)
         
         details_btn = QPushButton("CV Summary")
         details_btn.setObjectName("detailsBtn")
@@ -111,9 +124,9 @@ class ConfigurableResultCard(QFrame):
         buttons_layout.addWidget(view_cv_btn)
         
         # Add all elements to the main layout
-        layout.addWidget(name_label)
+        layout.addLayout(header_layout)
         layout.addWidget(keywords_label)
-        layout.addLayout(keywords_layout)
+        layout.addWidget(keywords_widget)
         layout.addStretch(1)
         layout.addLayout(buttons_layout)
         
@@ -125,38 +138,25 @@ class ConfigurableResultCard(QFrame):
         """Show details for this CV using CV Summary Window"""
         from .cv_summary_window import CVSummaryWindow
     
-        # Get additional profile data from database if needed
-        db = SessionLocal()
-        profile = db.query(ApplicantProfile).get(self.match_data.applicant_id)
+        # Get service directly
+        service = get_search_service()
+    
+        # Now use the service directly
+        cv_details = service.get_cv_details(self.match_data.resume_id)
     
         # Extract profile data with fallbacks
         name = self.name
-        birthdate = getattr(profile, 'birthdate', "Not available") if profile else "Not available"
-        address = getattr(profile, 'address', "Not available") if profile else "Not available"
-        phone = getattr(profile, 'phone', "Not available") if profile else "Not available"
+        birthdate = self.profile.date_of_birth if self.profile.date_of_birth else "Not available"
+        address = self.profile.address if self.profile.address else "Not available"
+        phone = self.profile.phone_number if self.profile.phone_number else "Not available"
     
         # Placeholder data - in a real app, you'd extract these from the CV or database
         # You could add functions to parse CV text from self.match_data.cv_path
         skills = list(self.occurrences.keys())  # Use matched keywords as skills for demo
     
-        # Example job history (replace with actual data in production)
-        jobs = [
-            {
-                "title": "Software Engineer",
-                "period": "2020-Present",
-                "description": f"CV matched {self.score} keyword occurrences"
-            }
-        ]
+        jobs = cv_details.get("jobs", [])
     
-        # Example education (replace with actual data in production)
-        education = [
-            {
-                "degree": "Computer Science",
-                "institution": "University",
-                "period": "2016-2020"
-            }
-        ]
-    
+        education = cv_details.get("education", [])
         # Create and show the summary window
         self.summary_window = CVSummaryWindow(
             name=name,
@@ -170,9 +170,6 @@ class ConfigurableResultCard(QFrame):
     
         # Show the window as non-modal
         self.summary_window.show()
-    
-        # Close the database connection
-        db.close()
     
     def open_pdf(self) -> None:
         """Open the CV PDF file with the system's default PDF viewer"""
@@ -250,16 +247,20 @@ class ConfigurableResultCard(QFrame):
             color: {self.gui_config.colors.text_primary};
             font-weight: bold;
             margin-bottom: {self.gui_config.spacing.margin_medium}px;
-            background-color: {self.gui_config.colors.bg_secondary};
+            background-color: transparent;
+            border: none;
             border-radius: {self.gui_config.spacing.border_radius_medium}px;
             padding: {self.gui_config.spacing.padding_small}px;
         }}
         QLabel#matchedKeywordsLabel {{
             color: {self.gui_config.colors.text_primary};
+            background-color: transparent;
+            border: none;
             font-weight: bold;
         }}
         QLabel#keywordItem {{
-            color: {self.gui_config.colors.text_secondary};
+            background-color: transparent;
+            border: none;
             padding-left: {self.gui_config.spacing.padding_small}px;
         }}
         """
@@ -390,12 +391,12 @@ class ConfigurableResultsSection(QWidget):
         """Set up the results section UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(
-            self.gui_config.spacing.margin_large,
             self.gui_config.spacing.margin_medium,
-            self.gui_config.spacing.margin_large,
-            self.gui_config.spacing.margin_large
+            self.gui_config.spacing.margin_small,
+            self.gui_config.spacing.margin_medium,
+            self.gui_config.spacing.margin_small
         )
-        layout.setSpacing(self.gui_config.spacing.margin_medium)
+        layout.setSpacing(self.gui_config.spacing.margin_small)
         
         # Results header section
         if self.config.show_statistics:
@@ -471,7 +472,7 @@ class ConfigurableResultsSection(QWidget):
         header_layout.addLayout(title_row)
         if self.config.show_progress_bar:
             header_layout.addWidget(self.progress_bar)
-        header_layout.addLayout(actions_row)
+        # header_layout.addLayout(actions_row)
         
         parent_layout.addWidget(header_frame)
         
@@ -491,6 +492,8 @@ class ConfigurableResultsSection(QWidget):
         # Scrollable content widget
         self.scroll_content = QWidget()
         self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_content.setObjectName("resultsScrollContent")
+        self.scroll_layout.setObjectName("resultsScrollLayout")
         self.scroll_layout.setContentsMargins(
             self.gui_config.spacing.margin_medium,
             self.gui_config.spacing.margin_medium,
@@ -576,18 +579,24 @@ class ConfigurableResultsSection(QWidget):
             border-radius: {self.gui_config.spacing.border_radius_large}px;
             background-color: {self.gui_config.colors.bg_primary};
         }}
-        QScrollBar:vertical {{
+
+        QWidget#resultsScrollContent {{
+            border-radius: {self.gui_config.spacing.border_radius_large}px;
+            background-color: {self.gui_config.colors.bg_primary};
+        }}
+
+        QScrollBar:vertical, QScrollBar:horizontal {{
             border: none;
             background-color: {self.gui_config.colors.border_light};
             width: 12px;
             border-radius: 6px;
         }}
-        QScrollBar::handle:vertical {{
+        QScrollBar::handle:vertical, QScrollBar::handle:horizontal  {{
             background-color: {self.gui_config.colors.border_medium};
             border-radius: 6px;
             min-height: 20px;
         }}
-        QScrollBar::handle:vertical:hover {{
+        QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {{
             background-color: {self.gui_config.colors.text_secondary};
         }}
         """
@@ -613,7 +622,7 @@ class ConfigurableResultsSection(QWidget):
             font-size: {self.gui_config.fonts.size_large}pt;
             font-style: italic;
             padding: {self.gui_config.spacing.padding_large * 2}px;
-            background-color: {self.gui_config.colors.bg_secondary};
+            background-color: {self.gui_config.colors.bg_primary};
             border-radius: {self.gui_config.spacing.border_radius_large}px;
             border: {self.gui_config.spacing.border_width_medium}px dashed {self.gui_config.colors.border_medium};
         }}
@@ -648,7 +657,7 @@ class ConfigurableResultsSection(QWidget):
             self.progress_bar.setVisible(False)
     
     def display_results(self, results: List[CVMatch], search_time: float, search_params: Dict[str, Any]) -> None:
-        """Display search results."""
+        """Display search results with adaptive card sizing."""
         if self.progress_bar:
             self.progress_bar.setVisible(False)
         
@@ -664,39 +673,79 @@ class ConfigurableResultsSection(QWidget):
         if self.search_time_label:
             self.search_time_label.setText(f"⏱️ Time: {search_time:.3f}s")
         
-        # No results
+        # Handle no results case by recreating the empty state label if needed
         if not results:
-            if self.empty_state_label:
-                self.empty_state_label.setText(self.config.no_results_message)
-                self.scroll_layout.addWidget(self.empty_state_label)
+            # Always recreate the empty state label to avoid deleted widget issues
+            # This ensures we have a fresh widget that hasn't been deleted
+            self.empty_state_label = QLabel(self.config.no_results_message)
+            self.empty_state_label.setObjectName("emptyStateLabel")
+            self.empty_state_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.empty_state_label.setStyleSheet(f"""
+                color: {self.gui_config.colors.text_secondary};
+                font-size: {self.gui_config.fonts.size_large}pt;
+                font-style: italic;
+                padding: {self.gui_config.spacing.padding_large * 2}px;
+                background-color: {self.gui_config.colors.bg_secondary};
+                border-radius: {self.gui_config.spacing.border_radius_large}px;
+                border: {self.gui_config.spacing.border_width_medium}px dashed {self.gui_config.colors.border_medium};
+            """)
+            
+            # Add to layout
+            self.scroll_layout.addWidget(self.empty_state_label)
             return
         
-        # Create a grid layout for applicant cards (3 columns)
-        grid_widget = QWidget()
-        grid_layout = QGridLayout(grid_widget)
-        grid_layout.setSpacing(self.gui_config.spacing.margin_medium)
+        # Create a container widget for all results
+        results_widget = QWidget()
+        results_layout = QVBoxLayout(results_widget)
+        results_layout.setContentsMargins(0, 0, 0, 0)
+        results_layout.setSpacing(self.gui_config.spacing.margin_medium)
         
-        # Add cards to grid layout
-        row, col = 0, 0
-        max_cols = 3  # 3 columns as shown in the image
+        # Get screen dimensions for responsive layout
+        from PyQt6.QtWidgets import QApplication
+        screen_width = QApplication.primaryScreen().size().width()
         
-        for result in self.current_results:
-            card = ConfigurableResultCard(result, self.config)
-            # Remove card click connections
-            # Just add animation if enabled
-            if self.config.enable_animations:
-                card.animate_entry()
+        # Calculate card width based on screen width
+        card_width = min(500, max(300, int((screen_width - 100) / 3)))
+        
+        # Adaptive column count based on screen width
+        max_cols = max(1, min(4, int(screen_width / 400)))  # 1-4 columns based on width
+        
+        # Create rows of cards
+        row_idx = 0
+        while row_idx < len(results):
+            # Create a new row container with fixed size policy
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(self.gui_config.spacing.margin_medium)
+            row_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)  # Left align cards in row
             
-            grid_layout.addWidget(card, row, col)
+            # Add cards to this row
+            cards_in_row = 0
+            for i in range(max_cols):
+                if row_idx + i < len(results):
+                    result = results[row_idx + i]
+                    card = ConfigurableResultCard(result, self.config)
+                    card.setMinimumWidth(card_width)
+                    card.setMaximumWidth(card_width)
+                    row_layout.addWidget(card)
+                    cards_in_row += 1
+                else:
+                    break
             
-            # Move to next position
-            col += 1
-            if col >= max_cols:
-                col = 0
-                row += 1
+            # Don't add any stretch to the row - let cards keep their size
+            row_idx += cards_in_row
+            results_layout.addWidget(row_widget)
         
-        self.scroll_layout.addWidget(grid_widget)
-        self.scroll_layout.addStretch()
+        # Add the results container to the scroll area
+        results_layout.addStretch()
+        self.scroll_layout.addWidget(results_widget)
+        
+        # Update button states
+        if self.export_btn:
+            self.export_btn.setEnabled(True)
+        if self.clear_results_btn:
+            self.clear_results_btn.setEnabled(True)
         
         # Auto-scroll to results if enabled
         if self.config.auto_scroll_to_results and self.scroll_area:
