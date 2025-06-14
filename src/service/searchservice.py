@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 from collections import Counter
 from ..database.models import SessionLocal, ApplicationDetail
-from ..database.pdf_utils import extract_text_from_pdf, prepare_texts_from_pdf, save_extracted_texts
+from ..database.pdf_utils import prepare_texts_from_pdf, save_extracted_texts
+from ..database.parser import extract_jobs, extract_education
 from ..search_algorithms.search_engine import SearchEngine, AlgorithmType, SearchMatch
 from ..config.config import CV_FOLDER
 
@@ -27,10 +28,9 @@ class SearchService:
     def __init__(self, max_workers: int = None):
         self.max_workers = max_workers
         self.engine = SearchEngine()
-        # Just keep one cache for now - the pattern cache for searches
-        self.text_cache_pattern = {}
-        # Keep regex cache structure but don't populate it yet
-        self.text_cache_regex = {}
+        # Keep both caches
+        self.text_cache_pattern = {}  # For searching
+        self.text_cache_regex = {}    # For structured data extraction
         
     def preprocess_cvs(self, progress_callback=None):
         """Use pdf_utils functions directly to avoid redundant processing"""
@@ -49,26 +49,29 @@ class SearchService:
         os.makedirs(cache_dir, exist_ok=True)
 
         def process_cv(resume):
-            pdf_path = os.path.join(CV_FOLDER, resume.cv_file_name + ".pdf")
+            pdf_path = os.path.join(CV_FOLDER, resume.cv_path + ".pdf")
             if not os.path.exists(pdf_path):
                 return None
             
-            # Define cache files for pattern format
-            cache_pattern = os.path.join(cache_dir, f"{resume.cv_file_name}_pattern.txt")
+            # Define cache files for both formats
+            cache_regex = os.path.join(cache_dir, f"{resume.cv_path}_regex.txt")
+            cache_pattern = os.path.join(cache_dir, f"{resume.cv_path}_pattern.txt")
             
             # Check if we need to parse the PDF
             need_parsing = True
-            if os.path.exists(cache_pattern):
+            if os.path.exists(cache_pattern) and os.path.exists(cache_regex):
                 pdf_mtime = os.path.getmtime(pdf_path)
-                cache_mtime = os.path.getmtime(cache_pattern)
+                cache_mtime = max(os.path.getmtime(cache_pattern), os.path.getmtime(cache_regex))
                 
                 # Use cache if it's newer than the PDF
                 if cache_mtime > pdf_mtime:
                     need_parsing = False
-                    # Read pattern text from cache
+                    # Read both formats from cache
+                    with open(cache_regex, 'r', encoding='utf-8') as f:
+                        text_regex = f.read()
                     with open(cache_pattern, 'r', encoding='utf-8') as f:
                         text_pattern = f.read()
-                    return resume.cv_file_name, text_pattern
+                    return resume.cv_path, (text_regex, text_pattern)
             
             # Parse PDF if needed
             if need_parsing:
@@ -77,15 +80,12 @@ class SearchService:
                 if result is None:
                     return None
                     
-                # Get the processed text for pattern searching (second item in tuple)
                 text_regex, text_pattern = result
                 
-                # Use save_extracted_texts to save both formats
-                # We're only using pattern format now, but we'll save regex too for future use
-                regex_cache = os.path.join(cache_dir, f"{resume.cv_file_name}_regex.txt")
-                save_extracted_texts(pdf_path, regex_cache, cache_pattern)
+                # Save both formats to cache
+                save_extracted_texts(pdf_path, cache_regex, cache_pattern)
                 
-                return resume.cv_file_name, text_pattern
+                return resume.cv_path, (text_regex, text_pattern)
                 
             return None
 
@@ -93,7 +93,8 @@ class SearchService:
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             for result in executor.map(process_cv, resumes):
                 if result:
-                    cv_id, text_pattern = result
+                    cv_id, (text_regex, text_pattern) = result
+                    self.text_cache_regex[cv_id] = text_regex
                     self.text_cache_pattern[cv_id] = text_pattern
                     
                 processed += 1
@@ -128,13 +129,13 @@ class SearchService:
         processed = 0  # Add this line
     
         def process(resume) -> Optional[CVMatch]:
-            pdf_path = os.path.join(CV_FOLDER, resume.cv_file_name + ".pdf")
+            pdf_path = os.path.join(CV_FOLDER, resume.cv_path + ".pdf")
             if not os.path.exists(pdf_path):
                 return None
                 
             # Use text_cache_pattern if available
-            if resume.cv_file_name in self.text_cache_pattern:
-                text = self.text_cache_pattern[resume.cv_file_name]
+            if resume.cv_path in self.text_cache_pattern:
+                text = self.text_cache_pattern[resume.cv_path]
             else:
                 # If not cached in memory, use prepare_texts_from_pdf
                 result = prepare_texts_from_pdf(pdf_path)
@@ -143,7 +144,7 @@ class SearchService:
                     
                 # Get the pattern text (second item)
                 _, text = result
-                self.text_cache_pattern[resume.cv_file_name] = text
+                self.text_cache_pattern[resume.cv_path] = text
                 
             all_matches = []
             
@@ -170,7 +171,7 @@ class SearchService:
             
             return CVMatch(
                 applicant_id=resume.applicant_id,
-                resume_id=resume.cv_file_name,
+                resume_id=resume.cv_path,
                 score=score,
                 cv_path=pdf_path,
                 occurrences=dict(counts)
@@ -193,3 +194,32 @@ class SearchService:
         elapsed = time.time() - start_time
 
         return total_scanned, elapsed, all_matches[:top_k]
+
+    def get_cv_details(self, cv_id: str) -> Dict:
+        """Get structured information from a CV using regex text"""
+        if cv_id not in self.text_cache_regex:
+            # Try to load from cache file
+            cache_regex = os.path.join(os.path.dirname(CV_FOLDER), "cache", f"{cv_id}_regex.txt")
+            if os.path.exists(cache_regex):
+                with open(cache_regex, 'r', encoding='utf-8') as f:
+                    self.text_cache_regex[cv_id] = f.read()
+            else:
+                # If not in cache, try to extract it from PDF
+                pdf_path = os.path.join(CV_FOLDER, f"{cv_id}.pdf")
+                if os.path.exists(pdf_path):
+                    result = prepare_texts_from_pdf(pdf_path)
+                    if result:
+                        self.text_cache_regex[cv_id] = result[0]  # Store regex text
+                
+        # Extract structured information if we have the regex text
+        if cv_id in self.text_cache_regex:
+            regex_text = self.text_cache_regex[cv_id]
+            jobs = extract_jobs(regex_text)
+            education = extract_education(regex_text)
+            
+            return {
+                "jobs": jobs,
+                "education": education
+            }
+        
+        return {"jobs": [], "education": []}
