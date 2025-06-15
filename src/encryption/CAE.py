@@ -9,7 +9,7 @@ class CAE:
     A class to encapsulate the Cellular Automata Encryption (CAE) system.
     This implementation uses Counter (CTR) mode for secure encryption of any length.
     """
-    def __init__(self, iterations=1_000_000, grid_size=16, generations=100):
+    def __init__(self, iterations=1_000, grid_size=16, generations=10):
         self.iterations = iterations
         self.grid_size = grid_size
         self.block_size = grid_size * grid_size  # 16x16 = 256 bytes
