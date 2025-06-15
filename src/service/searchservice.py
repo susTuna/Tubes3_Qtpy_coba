@@ -6,7 +6,7 @@ from typing import List, Tuple, Optional, Dict
 from collections import Counter
 from ..database.models import SessionLocal, ApplicationDetail
 from ..database.pdf_utils import prepare_texts_from_pdf, save_extracted_texts
-from ..database.parser import process_resume_text
+from ..database.parser import SectionScraper
 from ..search_algorithms.search_engine import SearchEngine, AlgorithmType, SearchMatch
 from ..config.config import CV_FOLDER
 
@@ -31,7 +31,8 @@ class SearchService:
         # Keep both caches
         self.text_cache_pattern = {}  # For searching
         self.text_cache_regex = {}    # For structured data extraction
-        
+        self.section = SectionScraper() 
+
     def preprocess_cvs(self, progress_callback=None):
         """Use pdf_utils functions directly to avoid redundant processing"""
         try:
@@ -223,7 +224,9 @@ class SearchService:
         # Extract structured information if we have the regex text
         if cv_id in self.text_cache_regex:
             regex_text = self.text_cache_regex[cv_id]
-            jobs, education, skills = process_resume_text(regex_text)
+            jobs = self.section.scrape_experience(regex_text)
+            education = self.section.scrape_education(regex_text)
+            skills = self.section.scrape_skills(regex_text)
             
             return {
                 "jobs": jobs,
