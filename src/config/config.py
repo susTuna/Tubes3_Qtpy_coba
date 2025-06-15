@@ -22,3 +22,5 @@ KAGGLE_USER = os.getenv("KAGGLE_USERNAME", "")
 KAGGLE_KEY = os.getenv("KAGGLE_KEY", "")
 
 DB_PATH = os.path.join(PROJECT_ROOT, "./src/database")
+
+ENCRYPTION_PASSWORD = os.getenv("ENCRYPT_PASSWORD", "admin")

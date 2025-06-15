@@ -13,8 +13,8 @@ from src.gui_components.result import ResultsSection
 from src.database.models import SessionLocal, ApplicationDetail
 from src.service.searchservice import SearchService
 from src.service.threadservice import PreprocessThread, SearchThread
-from src.config.config import CV_FOLDER
-from src.service.service_provider import set_search_service
+from src.service.encryptservice import EncryptService
+from src.service.service_provider import set_search_service, set_encrypt_service
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -27,6 +27,9 @@ class MainWindow(QMainWindow):
         self.db.close()
         
         # Create service and set it as global instance
+        self.encryptor = EncryptService()
+        set_encrypt_service(self.encryptor)
+        self.encryptor.encrypt()
         self.service = SearchService()
         set_search_service(self.service)
         

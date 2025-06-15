@@ -11,7 +11,7 @@ import time
 import subprocess
 import platform
 import os
-from ..service.service_provider import get_search_service
+from ..service.service_provider import get_search_service, get_encrypt_service
 
 
 class ConfigurableResultCard(QFrame):
@@ -30,13 +30,14 @@ class ConfigurableResultCard(QFrame):
         # Configuration
         self.config = config or gui_config.result
         self.gui_config = gui_config
+        self.decryptor = get_encrypt_service()
         
         # Data
         self.match_data = match_data
         self.db = SessionLocal()
         self.profile = self.db.query(ApplicantProfile).get(self.match_data.applicant_id)
         self.db.close()
-        self.name = self.profile.first_name + " " + self.profile.last_name if self.profile else "Unknown Applicant"
+        self.name = self.decryptor.decrypt(self.profile.first_name) + " " + self.decryptor.decrypt(self.profile.last_name) if self.profile else "Unknown Applicant"
         self.cv_path = self.match_data.cv_path
         self.score = self.match_data.score
         self.occurrences = self.match_data.occurrences
@@ -147,8 +148,8 @@ class ConfigurableResultCard(QFrame):
         # Extract profile data with fallbacks
         name = self.name
         birthdate = self.profile.date_of_birth if self.profile.date_of_birth else "Not available"
-        address = self.profile.address if self.profile.address else "Not available"
-        phone = self.profile.phone_number if self.profile.phone_number else "Not available"
+        address = self.decryptor.decrypt(self.profile.address) if self.profile.address else "Not available"
+        phone = self.decryptor.decrypt(self.profile.phone_number) if self.profile.phone_number else "Not available"
     
         # Placeholder data - in a real app, you'd extract these from the CV or database
         # You could add functions to parse CV text from self.match_data.cv_path
