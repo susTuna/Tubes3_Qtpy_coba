@@ -5,7 +5,7 @@
 </div>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-🔥Cooked🔥-FF0000" />
+  <img src="https://img.shields.io/badge/Status-Done-008000" />
   <img src="https://img.shields.io/badge/Version-1.0.0-brightgreen" />
   <img src="https://img.shields.io/badge/License-MIT-yellowgreen" />
   <img src="https://img.shields.io/badge/Built_With-Python-blue" />
