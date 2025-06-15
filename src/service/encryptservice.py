@@ -2,6 +2,7 @@ from ..database.models import SessionLocal, ApplicationDetail, ApplicantProfile
 from ..encryption.CAE import CAE
 from ..config.config import ENCRYPTION_PASSWORD
 import base64
+from sqlalchemy import text
 
 class EncryptService:
     def __init__(self):
@@ -80,7 +81,7 @@ class EncryptService:
                                 encryption_count += 1
                             else:
                                 encrypted_count += 1
-                
+                db.execute(text(f"ALTER TABLE ApplicantProfile MODIFY COLUMN {field} TEXT"))
                 db.commit()
                 if progress_callback:
                     progress_callback(offset + len(applicants), total_applicants, 
