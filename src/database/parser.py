@@ -1,120 +1,181 @@
 import re
-from typing import List, Dict, Tuple
 
-# Define common date components for reusability and clarity
-MONTHS_PATTERN = r'(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)'
-YEAR_PATTERN = r'(?:19|20)\d{2}' # THIS IS CRUCIAL: No '?' after \d{2}
+def extract_section_content(resume_text: str, section_name: str) -> str:
+    """
+    Extracts the full text content of a specified resume section.
 
-DAY_PATTERN = r'\d{1,2}'
+    Args:
+        resume_text (str): The complete resume text.
+        section_name (str): The name of the section to extract (e.g., "Work Experience", "Education").
 
-# Date format 1: "Month [Day], Year"
-# Ensure the '?': (?:MONTHS_PATTERN...) is applied to the whole MONTHS_PATTERN group
-DATE_FORMAT_1_PART = rf'(?:{MONTHS_PATTERN}[.,]?\s+)?(?:{DAY_PATTERN}[.,]?\s+)?{YEAR_PATTERN}'
+    Returns:
+        str: The raw text content of the section, or an empty string if not found.
+    """
+    # Define a comprehensive list of potential section headers for lookahead, including common variations.
+    all_possible_section_headers = [
+        "Work Experience", "Experience", "Work History",
+        "Education", "Educational Background",
+        "Skills", "Core Strengths", "Core Competencies",
+        "Certifications", "Professional Affiliations",
+        "Interests", "Additional Information",
+        "Summary", "Professional Summary", "Core Qualifications",
+        "Personal Information", "Languages", "Accomplishments",
+        "Career Overview", "Highlights" # Added more potential section dividers
+    ]
 
-# Date format 2: "MM/DD/YY"
-# Ensure NO '?' after {YEAR_PATTERN} here either
-DATE_FORMAT_2_PART = rf'(?:{DAY_PATTERN}[/.-])?{DAY_PATTERN}[/.-]{YEAR_PATTERN}'
+    # Dynamically build the lookahead part of the regex based on the section being extracted.
+    lookahead_headers = [header for header in all_possible_section_headers if section_name.lower() not in header.lower()]
+    # Ensure "Experience" is not included in lookahead if section_name is "Work Experience" and vice-versa
+    if section_name.lower() == "experience":
+        lookahead_headers = [h for h in lookahead_headers if h.lower() != "work experience" and h.lower() != "work history"]
+    elif section_name.lower() == "work experience" or section_name.lower() == "work history":
+        lookahead_headers = [h for h in lookahead_headers if h.lower() != "experience"]
 
-# Combined flexible single date pattern
-# This wraps the date format parts correctly in a non-capturing group
-FLEXIBLE_SINGLE_DATE_PATTERN = rf'(?:{DATE_FORMAT_1_PART}|{DATE_FORMAT_2_PART})'
+    lookahead_pattern_str = "|".join(re.escape(h) for h in lookahead_headers)
 
-# Full job entry pattern:
-# This wraps the first FLEXIBLE_SINGLE_DATE_PATTERN in a non-capturing group.
-# The second FLEXIBLE_SINGLE_DATE_PATTERN is also used correctly.
-JOB_PATTERN_REPAIRED = rf'(?:{FLEXIBLE_SINGLE_DATE_PATTERN})\s+(?:to|-)(?:\s+(?:Present|Current|{FLEXIBLE_SINGLE_DATE_PATTERN}))?\s+([^\n]+?)\s+(?:Company Name|Company|[—–-])'
+    # Handle variations for Experience/Work Experience/Work History and Education/Educational Background
+    if section_name == "Experience":
+        section_start_pattern = r"(?:Work Experience|Experience|Work History)"
+    elif section_name == "Education":
+        section_start_pattern = r"(?:Education|Educational Background)"
+    else:
+        section_start_pattern = re.escape(section_name)
 
-# Test compilation for debugging
-try:
-    re.compile(JOB_PATTERN_REPAIRED)
-    print("Repaired job pattern compiled successfully.")
-except re.error as e:
-    print(f"Error compiling repaired job pattern: {e}")
+    # Construct the full regex pattern
+    # re.DOTALL (re.S) allows '.' to match newlines.
+    # re.IGNORECASE (re.I) makes the match case-insensitive for headers.
+    # The lookahead is non-greedy (`.*?`) to stop at the *first* subsequent header.
+    pattern = rf"{section_start_pattern}\s*(.*?)(?=\s*(?:{lookahead_pattern_str})\s*:|\Z)"
 
-def extract_jobs(text: str) -> List[Dict[str, str]]:
-    """Extract job information from regex-formatted text and clean non-alphanumeric characters."""
+    match = re.search(pattern, resume_text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+def parse_job_entries(job_history_text: str) -> list[dict]:
+    """
+    Parses the raw job history text into a list of job dictionaries.
+
+    Args:
+        job_history_text (str): The raw text content of the job history section.
+
+    Returns:
+        list[dict]: A list of dictionaries, each representing a job with 'title', 'period', and 'description'.
+    """
     jobs = []
+    # This regex is designed to capture blocks starting with a potential job title.
+    # It assumes a common structure:
+    # Job Title (often capitalized, on its own line)
+    # Optional Period (e.g., "Jan 2013 to Jan 2014")
+    # Optional "Company Name" placeholder
+    # Optional "City , State" placeholder
+    # Description (everything else until the next job title pattern or end of section)
 
-    print(f"DEBUG: The job_pattern string being compiled is: '{JOB_PATTERN_REPAIRED}'")
-    
-    try:
-        matches = re.finditer(JOB_PATTERN_REPAIRED, text, re.DOTALL | re.MULTILINE | re.IGNORECASE)
+    job_regex = re.compile(
+        # Capture Job Title (Group 'title') - starts a line, often capitalized, or looks like a title
+        r"^(?P<title>[A-Za-z][\w\s.&,-/]+?)\s*$\n"
+        # Optional Period (Group 'period') - flexible for "Mon Year" or "Mon Year to Mon Year/Current"
+        r"(?:\s*(?P<period>(?:[A-Za-z]{3}\s*\d{4}|Present|Current)(?:\s*(?:to|-)\s*(?:[A-Za-z]{3}\s*\d{4}|Present|Current))?)\s*$\n)?"
+        # Optional "Company Name" placeholder line (non-capturing group)
+        r"(?:\s*Company Name\s*$\n)?"
+        # Optional "City , State" placeholder line (non-capturing group)
+        r"(?:\s*City\s*,\s*State\s*$\n)?"
+        # Description (Group 'description') - non-greedy, matches anything until next job or end
+        r"(?P<description>[\s\S]*?)"
+        # Lookahead for the start of the next job entry (another capitalized title line) or end of string
+        r"(?=\n^\s*[A-Za-z][\w\s.&,-/]+?\s*$|\Z)",
+        re.MULTILINE | re.DOTALL | re.IGNORECASE
+    )
+
+    for match in job_regex.finditer(job_history_text):
+        title = match.group('title').strip()
+        period = match.group('period').strip() if match.group('period') else ''
+        description = match.group('description').strip()
+
+        # Further clean up description to remove lingering placeholders or excess newlines
+        description = re.sub(r"^\s*Company Name\s*$", "", description, flags=re.MULTILINE | re.IGNORECASE).strip()
+        description = re.sub(r"^\s*City\s*,\s*State\s*$", "", description, flags=re.MULTILINE | re.IGNORECASE).strip()
         
-        for match in matches:
-            try:
-                date_range_raw = match.group(0).split("\n")[0].strip()
-                title = match.group(1).strip() if len(match.groups()) >= 1 else "Unknown Position"
-                
-                jobs.append({
-                    "title": (title),
-                    "company": ("Company Name"), # This might need to be extracted from the match, depending on how "Company Name" is used in the regex
-                    "period": (date_range_raw),
-                    "description": ("Job details not available") # Placeholder, usually extracted from text after company
-                })
-            except Exception as e:
-                print(f"Error processing job match: {e}")
-    except Exception as e:
-        print(f"Error in job extraction: {e}")
-        
-    if not jobs:
-        jobs = [{
-            "title": ("Position from CV"),
-            "company": ("Company mentioned in CV"),
-            "period": ("Time period mentioned in CV"),
-            "description": ("Additional details would appear here")
-        }]
-        
+        # Remove empty lines in description
+        description_lines = [line.strip() for line in description.split('\n') if line.strip()]
+        description = '\n'.join(description_lines)
+
+        jobs.append({
+            'title': title,
+            'period': period,
+            'description': description
+        })
     return jobs
 
-def extract_education(text: str) -> List[Dict[str, str]]:
-    """Extract education information from regex-formatted text and clean non-alphanumeric characters."""
-    education = []
-    
-    # Look for education section
-    education_section_pattern = r'(?:Education|Education and Training|Educational Background|Academic Background)(?:\s+and\s+Training)?[:\n]+(.*?)(?=\n\n\s*(?:Experience|Work|Employment|Professional|Skills|Certifications|Additional|Interests|Personal|\Z))'
-    edu_match = re.search(education_section_pattern, text, re.DOTALL | re.IGNORECASE)
-    
-    if not edu_match:
-        return education
-    
-    edu_text = edu_match.group(1)
-    
-    # Pattern to match individual education entries
-    degree_pattern = r'(?:Bachelor|Master|Associate|Ph\.?D\.?|Doctor|MBA|BS|BA|MS|AA|M\.?A\.?|B\.?S\.?|B\.?A\.?|M\.?S\.?|A\.?A\.?)[^\n]*((?:19|20)\d{2}|(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\n]*?(?:19|20)\d{2}|(?:19|20)\d{2}[^\n]*?(?:Present|Current))?[^\n]*?\n([^\n]+)'
-    
-    # Also look for common university/college indicators
-    institution_pattern = r'(?:University|College|Institute|School)[^\n]*?(?:(?:19|20)\d{2}|(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\n]*?(?:19|20)\d{2})?[^\n]*?\n([^\n]+)'
-    
-    # Combine both patterns
-    for pattern in [degree_pattern, institution_pattern]:
-        matches = re.finditer(pattern, edu_text, re.IGNORECASE)
+def parse_education_entries(education_text: str) -> list[dict]:
+    """
+    Parses the raw education text into a list of education dictionaries.
+
+    Args:
+        education_text (str): The raw text content of the education section.
+
+    Returns:
+        list[dict]: A list of dictionaries, each representing an education entry
+                    with 'degree', 'institution', and 'period'.
+    """
+    education_entries = []
+    # This regex is designed to capture blocks starting with a potential degree title.
+    # It assumes a structure like:
+    # Degree (possibly with major, e.g., "Master's , Business Administration")
+    # Optional Period (e.g., "2015")
+    # Optional Institution Name
+    # Optional Location ("City , State" and "USA")
+    # Optional GPA line
+
+    education_entry_regex = re.compile(
+        # Capture Degree (Group 'degree') - flexible for various degree names and optional major
+        r"^(?P<degree>(?:Master(?:'s)?|Bachelor(?:'s)?|Associate(?:'s)?|Diploma|Certificate|Coursework)(?:\s+of\s+[A-Za-z]+)?(?:\s*[,:]?\s*.+?)?)\s*$\n?"
+        # Optional Period (Group 'period') - allows for year or year ranges, or just 'Current'
+        r"(?:\s*\(?(?P<period>\d{4}(?:[-to]+\d{4})?|Current)\)?\s*$\n)?"
+        # Optional Institution (Group 'institution') - captures until next placeholder or end of line
+        r"(?:\s*(?P<institution>[A-Za-z][\w\s&.,'-]*?)\s*$\n)?"
+        # Optional GPA line (non-capturing)
+        r"(?:\s*GPA:.*?\s*$\n)?"
+        # Optional "City , State" and "USA" placeholders (non-capturing)
+        r"(?:\s*City\s*,\s*State(?:\s*,\s*USA)?\s*$\n)?"
+        # Lookahead for the start of the next education entry (another degree line) or end of string
+        r"(?=\n^\s*(?:Master(?:'s)?|Bachelor(?:'s)?|Associate(?:'s)?|Diploma|Certificate|Coursework)|\Z)",
+        re.MULTILINE | re.DOTALL | re.IGNORECASE
+    )
+
+    for match in education_entry_regex.finditer(education_text):
+        degree = match.group('degree').strip()
+        period = match.group('period').strip() if match.group('period') else ''
+        institution = match.group('institution').strip() if match.group('institution') else ''
+
+        # Clean up any residual GPA or "City, State" from degree/institution if they snuck in
+        degree = re.sub(r"(?:\s*GPA:.*|\s*City\s*,\s*State.*)", "", degree, flags=re.IGNORECASE).strip()
+        institution = re.sub(r"(?:\s*GPA:.*|\s*City\s*,\s*State.*)", "", institution, flags=re.IGNORECASE).strip()
         
-        for match in matches:
-            try:
-                degree_info = match.group(0).strip()
-                
-                # Extract components
-                institution = match.group(1).strip() if len(match.groups()) > 0 else ""
-                field = match.group(2).strip() if len(match.groups()) > 1 else ""
-                
-                # Check if we already have this entry (avoid duplicates)
-                duplicate = False
-                for entry in education:
-                    # Compare cleaned versions to detect duplicates more reliably
-                    if (institution) in (entry.get("institution", "")) or \
-                       (entry.get("institution", "")) in (institution):
-                        duplicate = True
-                        break
-                
-                if not duplicate:
-                    education.append({
-                        "degree": (degree_info.split('\n')[0]),
-                        "institution": (institution),
-                        "field": (field)
-                    })
-            
-            except Exception as e:
-                print(f"Error extracting education: {e}")
-                continue
-    
-    return education
+        education_entries.append({
+            'degree': degree,
+            'institution': institution,
+            'period': period
+        })
+    return education_entries
+
+# Example Usage (as provided by user to test with):
+def process_resume_text(resume_text_content: str):
+    """
+    Processes a full resume text to extract structured job history and education.
+
+    Args:
+        resume_text_content (str): The full text content of a resume.
+
+    Returns:
+        tuple[list[dict], list[dict]]: A tuple containing lists for jobs and education.
+    """
+    # 1. Extract raw section contents
+    job_history_raw = extract_section_content(resume_text_content, "Experience") # Using "Experience" as it's common
+    education_raw = extract_section_content(resume_text_content, "Education")
+
+    # 2. Parse individual entries from raw sections
+    jobs = parse_job_entries(job_history_raw)
+    education = parse_education_entries(education_raw)
+
+    return jobs, education

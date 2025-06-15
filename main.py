@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 from src.gui_components.header import HeaderComponent
 from src.gui_components.search import SearchControls
 from src.gui_components.result import ResultsSection
+from src.database.models import SessionLocal, ApplicationDetail
 from src.service.searchservice import SearchService
 from src.service.threadservice import PreprocessThread, SearchThread
 from src.config.config import CV_FOLDER
@@ -21,6 +22,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Applicant Tracking System")
         self.setGeometry(100, 100, 1280, 720)
         self.setup_ui()
+        self.db = SessionLocal()
+        self.cv_count = self.db.query(ApplicationDetail).count()
+        self.db.close()
         
         # Create service and set it as global instance
         self.service = SearchService()
@@ -272,14 +276,10 @@ class MainWindow(QMainWindow):
 
     def preprocess_cvs(self):
         """Preprocess CVs in background thread with progress dialog"""
-        # First, get count of files to process
-        import os
-        cv_files = [f for f in os.listdir(CV_FOLDER) if f.endswith('.pdf')]
-        total_files = len(cv_files)
         
         # Create progress dialog
         from PyQt6.QtWidgets import QProgressDialog
-        self.preprocess_progress = QProgressDialog("Preprocessing CVs...", "Cancel", 0, total_files, self)
+        self.preprocess_progress = QProgressDialog("Preprocessing CVs...", "Cancel", 0, self.cv_count, self)
         self.preprocess_progress.setWindowTitle("CV Preprocessing")
         self.preprocess_progress.setMinimumDuration(0)  # Show immediately
         self.preprocess_progress.setWindowModality(Qt.WindowModality.WindowModal)

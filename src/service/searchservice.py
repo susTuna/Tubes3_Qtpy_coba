@@ -6,7 +6,7 @@ from typing import List, Tuple, Optional, Dict
 from collections import Counter
 from ..database.models import SessionLocal, ApplicationDetail
 from ..database.pdf_utils import prepare_texts_from_pdf, save_extracted_texts
-from ..database.parser import extract_jobs, extract_education
+from ..database.parser import process_resume_text
 from ..search_algorithms.search_engine import SearchEngine, AlgorithmType, SearchMatch
 from ..config.config import CV_FOLDER
 
@@ -51,7 +51,7 @@ class SearchService:
         os.makedirs(cache_dir, exist_ok=True)
 
         def process_cv(resume):
-            pdf_path = os.path.join(CV_FOLDER, resume.cv_path + ".pdf")
+            pdf_path = resume.cv_path
             if not os.path.exists(pdf_path):
                 return None
             
@@ -103,7 +103,7 @@ class SearchService:
                 if progress_callback:
                     progress = min(100, int((processed / total) * 100))
                     progress_callback(progress)
-                    
+
         if progress_callback:
             progress_callback(100)
 
@@ -135,7 +135,7 @@ class SearchService:
         processed = 0  # Add this line
     
         def process(resume) -> Optional[CVMatch]:
-            pdf_path = os.path.join(CV_FOLDER, resume.cv_path + ".pdf")
+            pdf_path = resume.cv_path
             if not os.path.exists(pdf_path):
                 return None
                 
@@ -223,8 +223,7 @@ class SearchService:
         # Extract structured information if we have the regex text
         if cv_id in self.text_cache_regex:
             regex_text = self.text_cache_regex[cv_id]
-            jobs = extract_jobs(regex_text)
-            education = extract_education(regex_text)
+            jobs, education = process_resume_text(regex_text)
             
             return {
                 "jobs": jobs,
