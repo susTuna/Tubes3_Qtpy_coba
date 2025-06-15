@@ -223,11 +223,12 @@ class SearchService:
         # Extract structured information if we have the regex text
         if cv_id in self.text_cache_regex:
             regex_text = self.text_cache_regex[cv_id]
-            jobs, education = process_resume_text(regex_text)
+            jobs, education, skills = process_resume_text(regex_text)
             
             return {
                 "jobs": jobs,
-                "education": education
+                "education": education,
+                "skills": skills
             }
         
-        return {"jobs": [], "education": []}
+        return {"jobs": [], "education": [], "skills": []}

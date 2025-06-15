@@ -15,6 +15,11 @@ def extract_text_from_pdf(pdf_path):
         return ""
     return text
 
+def clean_text(text):
+    text = text.strip().replace("\n", " ").replace("\r", "").replace("Â", "").replace("ï¼", "")  # Remove unwanted characters
+    text = re.sub(r'\s+', ' ', text)  
+    return text
+
 def prepare_texts_from_pdf(pdf_path: str) -> tuple[str, str] | None:
     """
     Fungsi utama yang baru: Mengekstrak dan mempersiapkan teks dari PDF.
@@ -29,9 +34,8 @@ def prepare_texts_from_pdf(pdf_path: str) -> tuple[str, str] | None:
     if not raw_text:
         return None
     
-    regex_text = raw_text
-    regex_text = re.sub(r'[^a-zA-Z0-9\s.,!?;:\'"`@#$%^&*()_+={}\[\]|\\/<>~-]', ' ', regex_text, flags=re.UNICODE)
-
+    regex_text = clean_text(raw_text)
+    
     text_for_pattern = raw_text.replace('\n', ' ').replace('\r', ' ').strip().lower()
 
     return regex_text, text_for_pattern
