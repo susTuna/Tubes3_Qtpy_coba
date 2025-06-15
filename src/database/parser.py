@@ -1,8 +1,6 @@
-from PyPDF2 import PdfReader
 from typing import List
 
 import re
-import os
 
 class SectionScraper:
     '''Scrapes sections out of PDF dumps'''

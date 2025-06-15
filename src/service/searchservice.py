@@ -7,6 +7,7 @@ from collections import Counter
 from ..database.models import SessionLocal, ApplicationDetail
 from ..database.pdf_utils import prepare_texts_from_pdf, save_extracted_texts
 from ..database.parser import SectionScraper
+from ..database.parser import SectionScraper
 from ..search_algorithms.search_engine import SearchEngine, AlgorithmType, SearchMatch
 from ..config.config import CV_FOLDER
 
